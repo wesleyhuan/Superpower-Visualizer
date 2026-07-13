@@ -28,3 +28,22 @@ describe('SessionManager: canUseTool 閘門', () => {
     expect(messages[0].decision.behavior).toBe('allow')
   })
 })
+
+describe('SessionManager: pause', () => {
+  it('pause 會把所有 pending 以 deny resolve 並清空', async () => {
+    const mgr = new SessionManager({
+      runQuery: ({ canUseTool }: any) => (async function* () {
+        const d = await canUseTool('Bash', {}, { toolUseId: 'toolu_p' })
+        yield { type: 'result', decision: d }
+      })(),
+    })
+    const messages: any[] = []
+    mgr.onMessage((m) => messages.push(m))
+    mgr.onAwaitTool(() => {})
+    mgr.start('go')
+    // 等 pending 建立後 pause
+    await new Promise((r) => setTimeout(r, 10))
+    mgr.pause()
+    await vi.waitFor(() => expect(messages.some((m) => m.decision?.behavior === 'deny')).toBe(true))
+  })
+})

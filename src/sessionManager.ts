@@ -13,6 +13,8 @@ export class SessionManager {
   private msgCbs: ((m: any) => void)[] = []
   private awaitCbs: ((a: { toolUseId: string; name: string; input: unknown }) => void)[] = []
   private controller = new AbortController()
+  private inbox: any[] = []
+  private inboxResolvers: ((v: IteratorResult<any>) => void)[] = []
 
   constructor(private deps: { runQuery: RunQuery }) {}
 
@@ -34,18 +36,47 @@ export class SessionManager {
     resolve(allow ? { behavior: 'allow', updatedInput: undefined } : { behavior: 'deny', message: 'user denied' })
   }
 
+  private pushInput(msg: any) {
+    const r = this.inboxResolvers.shift()
+    if (r) r({ value: msg, done: false })
+    else this.inbox.push(msg)
+  }
+
+  private inputQueue(): AsyncIterable<any> {
+    const self = this
+    return {
+      [Symbol.asyncIterator]() {
+        return {
+          next(): Promise<IteratorResult<any>> {
+            if (self.inbox.length) return Promise.resolve({ value: self.inbox.shift(), done: false })
+            return new Promise((resolve) => self.inboxResolvers.push(resolve))
+          },
+        }
+      },
+    }
+  }
+
+  sendFollowup(text: string) {
+    console.log('[SessionManager] followup queued')
+    this.pushInput({ type: 'user', message: { role: 'user', content: text } })
+  }
+
+  pause() {
+    console.log('[SessionManager] pause: denying', this.pending.size, 'pending')
+    for (const [, resolve] of this.pending) resolve({ behavior: 'deny', message: 'paused' })
+    this.pending.clear()
+    this.controller.abort()
+  }
+
   start(initialPrompt: string) {
-    void this.consume(initialPrompt)
+    this.pushInput({ type: 'user', message: { role: 'user', content: initialPrompt } })
+    void this.consume()
   }
 
-  private async *inputGen(initialPrompt: string): AsyncIterable<any> {
-    yield { type: 'user', message: { role: 'user', content: initialPrompt } }
-  }
-
-  private async consume(initialPrompt: string) {
+  private async consume() {
     try {
       const stream = this.deps.runQuery({
-        prompt: this.inputGen(initialPrompt),
+        prompt: this.inputQueue(),
         canUseTool: this.canUseTool,
         signal: this.controller.signal,
       })
