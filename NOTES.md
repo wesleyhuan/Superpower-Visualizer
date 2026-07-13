@@ -51,4 +51,11 @@
       前端按「核准」→ POST `/control` → SessionManager resolve pending → agent 續跑 → 檔案寫出 → 節點轉 `done`。
       `await:tool` 的 toolUseId 與 `tree:node` id 完全相同(`toolu_...`),證明 `toolUseID` 對接正確、前端節點狀態連動成立。
 - [x] **Skill 工具的 tool name 與 input**:name=`Skill`、input.skill(見上)。
-- [ ] `pause()` → abort 後 stream 的結束方式(丟錯 vs 收 result),確認 SessionManager try/catch 轉 `session_error` 的時機 —— **仍待專門的暫停 E2E**。
+- [x] **`pause()` → abort 行為**(`spike/pause-e2e.ts` 實測,2026-07-14):
+  - **同一回合內暫停**:in-flight 工具被中斷 → 回 `is_error` 的 tool_result(節點轉 `error`)→ agent 停手 →
+    stream **乾淨結束、`for await` 不丟錯、不發 `session_error`**。後端 log 無 `consume error:`。
+  - ⚠️ **限制:pause 後 session 等於已死。** `pause()` abort 了 `this.controller` 卻**沒有重建**,
+    之後任何 `/start` / `/followup` 會讓新的 `consume()` 拿到已 abort 的 signal → 立刻丟
+    `Error: Operation aborted` → 被 catch → 發 `session_error`(前端顯示「Session 已結束」)。
+    → 目前 pause 實質是「終止」而非可續的「暫停」。ControlBar 派任務框在 pause 後仍 enabled 屬**已知誤導**。
+  - **後續修法(超出 v1)**:`pause()` abort 後重建 `AbortController`,或明確區分「暫停(可續)」與「停止(終止)」。
