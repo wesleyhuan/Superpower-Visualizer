@@ -50,6 +50,28 @@ export function applyPacket(state: SessionState, packet: Packet): SessionState {
     case 'log':
       next.logs = [...state.logs, ev.entry].slice(-500)
       break
+    case 'await:tool': {
+      next.pending = [...state.pending, { toolUseId: ev.toolUseId, name: ev.name, input: ev.input }]
+      const n = next.nodes[ev.toolUseId]
+      if (n) next.nodes[ev.toolUseId] = { ...n, status: 'awaiting' }
+      break
+    }
+    case 'session:error': {
+      next.sessionEnded = true
+      next.errorMessage = ev.message
+      next.pending = []
+      for (const id of next.order) {
+        const n = next.nodes[id]
+        if (n && (n.status === 'running' || n.status === 'awaiting')) {
+          next.nodes[id] = { ...n, status: 'failed' }
+        }
+      }
+      break
+    }
   }
   return next
+}
+
+export function resolvePending(state: SessionState, toolUseId: string): SessionState {
+  return { ...state, pending: state.pending.filter((p) => p.toolUseId !== toolUseId) }
 }
