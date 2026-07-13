@@ -57,6 +57,18 @@ describe('translate: subagent 掛載', () => {
     })
   })
 
+  it('Skill tool_use → skill 節點,label 用 input.skill(spike 校正)', () => {
+    const msg = {
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'tool_use', id: 'toolu_skill', name: 'Skill', input: { skill: 'superpowers:brainstorming' } }] },
+    }
+    expect(translate(msg)).toContainEqual({
+      kind: 'tree:node',
+      node: { id: 'toolu_skill', parentId: null, type: 'skill', label: 'skill: superpowers:brainstorming', status: 'running' },
+    })
+  })
+
   it('Agent tool_use → subagent 節點(spike 校正:真實工具名為 Agent 非 Task)', () => {
     const msg = {
       type: 'assistant',

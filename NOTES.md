@@ -24,7 +24,8 @@
 5. **subagent / skill 呈現**:⚠️ **重大校正** —— 實際的 subagent 工具名是 **`Agent`**(不是假設的 `Task`),
    `input` 為 `{ description, prompt, subagent_type, run_in_background }`。
    - Translator 已修:`Agent` 與 `Task` 皆 → `subagent`,label 用 `input.description`。
-   - `Skill` 這回合未觸發(prompt 沒用到 skill),`Skill → skill` 對應保留待日後實測。
+   - ✅ **Skill 已於瀏覽器 E2E 實測**:name=`Skill` → `skill` 正確;input 欄位是 `skill`(如 `superpowers:brainstorming`),
+     Translator 的 `labelFor` 已改用 `input.skill`。
 
 ## canUseTool(核准閘)關鍵發現
 
@@ -44,8 +45,10 @@
   (`signal.addEventListener('abort', () => abortController.abort())`)。
 - abort 後 `for await` 的實際結束方式(丟錯 vs 收 result)本回合未觸發,**留待真實暫停 E2E 驗證**。
 
-## 仍待驗證(需一次帶「需權限工具 + 暫停」的 E2E)
+## E2E 驗證結果(2026-07-14)
 
-- [ ] canUseTool 對 Bash/Write/Edit 實際觸發,核准框閉環(前端按核准 → 後端 resolve → agent 續跑)。
-- [ ] `pause()` → abort 後 stream 的結束方式,確認 SessionManager try/catch 轉 `session_error` 的時機。
-- [ ] `Skill` 工具的實際 tool name 與 input 形狀。
+- [x] **canUseTool 對 Write 實際觸發,核准框閉環** —— headless(`spike/e2e.ts`)+ 真實瀏覽器(Playwright)兩層都通:
+      前端按「核准」→ POST `/control` → SessionManager resolve pending → agent 續跑 → 檔案寫出 → 節點轉 `done`。
+      `await:tool` 的 toolUseId 與 `tree:node` id 完全相同(`toolu_...`),證明 `toolUseID` 對接正確、前端節點狀態連動成立。
+- [x] **Skill 工具的 tool name 與 input**:name=`Skill`、input.skill(見上)。
+- [ ] `pause()` → abort 後 stream 的結束方式(丟錯 vs 收 result),確認 SessionManager try/catch 轉 `session_error` 的時機 —— **仍待專門的暫停 E2E**。

@@ -12,7 +12,8 @@ export function toolTypeOf(name: string): NodeType {
 
 function labelFor(name: string, input: any): string {
   if (name === 'Bash' && input?.command) return `Bash: ${input.command}`
-  if (name === 'Skill' && input?.command) return `skill: ${input.command}`
+  // spike 校正:Skill 工具的 input 欄位是 `skill`(如 'superpowers:brainstorming'),非 command。
+  if (name === 'Skill' && (input?.skill || input?.command)) return `skill: ${input.skill ?? input.command}`
   if (SUBAGENT_TOOLS.has(name) && input?.description) return `subagent: ${input.description}`
   return name
 }
