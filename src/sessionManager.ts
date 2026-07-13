@@ -66,6 +66,12 @@ export class SessionManager {
     for (const [, resolve] of this.pending) resolve({ behavior: 'deny', message: 'paused' })
     this.pending.clear()
     this.controller.abort()
+    // 重建 controller,否則下一次 start() 會沿用已 abort 的 signal → 立刻 Operation aborted。
+    this.controller = new AbortController()
+    // 清掉舊 session 遺留的輸入佇列:已死 iterator 的 parked resolver 若留著,
+    // 會被下一次 start() 的 pushInput shift 走、把新訊息餵給死掉的 query。
+    this.inbox = []
+    this.inboxResolvers = []
   }
 
   start(initialPrompt: string) {

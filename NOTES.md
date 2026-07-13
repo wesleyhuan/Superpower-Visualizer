@@ -54,8 +54,14 @@
 - [x] **`pause()` → abort 行為**(`spike/pause-e2e.ts` 實測,2026-07-14):
   - **同一回合內暫停**:in-flight 工具被中斷 → 回 `is_error` 的 tool_result(節點轉 `error`)→ agent 停手 →
     stream **乾淨結束、`for await` 不丟錯、不發 `session_error`**。後端 log 無 `consume error:`。
-  - ⚠️ **限制:pause 後 session 等於已死。** `pause()` abort 了 `this.controller` 卻**沒有重建**,
-    之後任何 `/start` / `/followup` 會讓新的 `consume()` 拿到已 abort 的 signal → 立刻丟
-    `Error: Operation aborted` → 被 catch → 發 `session_error`(前端顯示「Session 已結束」)。
-    → 目前 pause 實質是「終止」而非可續的「暫停」。ControlBar 派任務框在 pause 後仍 enabled 屬**已知誤導**。
-  - **後續修法(超出 v1)**:`pause()` abort 後重建 `AbortController`,或明確區分「暫停(可續)」與「停止(終止)」。
+  - ✅ **已修(選項 B):pause 後可開新 session。** 先前 `pause()` abort 了 `this.controller` 卻沒重建,
+    導致下一次 `/start` 拿到已 abort 的 signal → 立刻 `Operation aborted` → `session_error`(session 等於已死)。
+    修法在 `pause()` 內:abort 後**重建 `AbortController`**,並**清空輸入佇列**(`inbox` / `inboxResolvers`)——
+    後者是隱藏 bug:舊 session 遺留在 `inboxResolvers` 的孤兒 resolver 會被下一次 `pushInput` 的 `shift()` 取走、
+    把新訊息餵給已死的 iterator,使新 query 收不到 prompt。
+  - **驗證**:`spike/pause-resume-e2e.ts` 實測 —— task1 → pause → task2(Write)→ `canUseTool Write` 觸發、核准後
+    寫檔成功、**零 `session_error`**。單元:`tests/sessionManager.test.ts`「pause 後重建 AbortController」。
+  - **語意注意**:這是「可開**新** session」,不是「續原對話」——abort 後 SDK 對話已丟。派任務(followup)若要延續
+    同一對話,不應先 pause。ControlBar 在 pause 後仍 enabled,語意上比較接近「開新任務」。
+  - **附帶觀察**:nested agent(Agent SDK 內的 claude 子程序)寫相對路徑檔時,cwd 落在專案名的連字號變體目錄
+    (`claude-code-superpower-visualizer`),非 server 的 cwd。與 pause 無關,但寫檔任務給絕對路徑較保險。

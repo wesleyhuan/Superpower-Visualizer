@@ -46,4 +46,25 @@ describe('SessionManager: pause', () => {
     mgr.pause()
     await vi.waitFor(() => expect(messages.some((m) => m.decision?.behavior === 'deny')).toBe(true))
   })
+
+  it('pause 後重建 AbortController:後續 start 拿到未 abort 的 signal(可開新 session)', async () => {
+    const signals: AbortSignal[] = []
+    const mgr = new SessionManager({
+      runQuery: ({ signal }: any) => {
+        signals.push(signal)
+        return (async function* () { /* 立即結束,不吐訊息 */ })()
+      },
+    })
+    mgr.onMessage(() => {})
+    mgr.onAwaitTool(() => {})
+
+    mgr.start('first')
+    await vi.waitFor(() => expect(signals).toHaveLength(1))
+    mgr.pause()
+    expect(signals[0].aborted).toBe(true) // 舊 session 的 signal 被 abort
+
+    mgr.start('second')
+    await vi.waitFor(() => expect(signals).toHaveLength(2))
+    expect(signals[1].aborted).toBe(false) // 新 session 拿到全新、未 abort 的 signal
+  })
 })

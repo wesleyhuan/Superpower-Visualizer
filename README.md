@@ -100,8 +100,8 @@ NOTES.md                SDK 觀察筆記(spike 實測校正結果)
 
 - 後端 snapshot 只含 nodes + logs,**不含 pending 核准**。若「斷線時剛好有核准等待中」,重連後無法從
   snapshot 還原核准框(前端已把該節點標為 🟡 awaiting 作為部分補償)。完整修復需後端序列化 pending。
-- **「暫停」目前實質是「終止」**:pause 會中斷進行中的工具(節點轉 error)並讓 agent 停手,但
-  `AbortController` 未重建,之後再派任務 / 啟動會立刻 `Operation aborted` → session 結束。可續的暫停需後端
-  重建 controller(見 `NOTES.md` 實測與修法)。
+- **「暫停」是「中止目前執行」而非「續原對話」**:pause 會中斷進行中的工具(節點轉 error)並讓 agent 停手,
+  之後可用輸入框啟動**新**任務(pause 已重建 AbortController + 清輸入佇列)。但 abort 後 SDK 對話已丟,
+  無法延續同一對話——要延續請直接用「派新任務」而不要先 pause(見 `NOTES.md`)。
 - 單一 session;成本 / token 統計、任務看板為刻意排除的擴充點(YAGNI)。
 ```
