@@ -43,3 +43,28 @@ describe('translate: user tool_result', () => {
     expect(events.some((e) => e.kind === 'log' && e.entry.level === 'error')).toBe(true)
   })
 })
+
+describe('translate: subagent 掛載', () => {
+  it('Task tool_use → subagent 節點', () => {
+    const msg = {
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'tool_use', id: 'toolu_task', name: 'Task', input: { description: '研究登入流程' } }] },
+    }
+    expect(translate(msg)).toContainEqual({
+      kind: 'tree:node',
+      node: { id: 'toolu_task', parentId: null, type: 'subagent', label: 'subagent: 研究登入流程', status: 'running' },
+    })
+  })
+
+  it('subagent 內部的工具帶 parent_tool_use_id → 掛在 subagent 節點下', () => {
+    const msg = {
+      type: 'assistant',
+      parent_tool_use_id: 'toolu_task',
+      message: { content: [{ type: 'tool_use', id: 'toolu_grep', name: 'Grep', input: { pattern: 'auth' } }] },
+    }
+    const node = (translate(msg)[0] as any).node
+    expect(node.parentId).toBe('toolu_task')
+    expect(node.id).toBe('toolu_grep')
+  })
+})
