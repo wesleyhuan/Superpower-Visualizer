@@ -28,5 +28,28 @@ export function applyPacket(state: SessionState, packet: Packet): SessionState {
     console.log('[store] drop stale event seq', packet.seq, '<=', state.seq)
     return state
   }
-  return { ...state, seq: packet.seq } // 事件套用邏輯在 Task 4/5 補上
+  const next: SessionState = {
+    ...state,
+    seq: packet.seq,
+    nodes: { ...state.nodes },
+    order: [...state.order],
+    logs: state.logs,
+    pending: state.pending,
+  }
+  const ev = packet.event
+  switch (ev.kind) {
+    case 'tree:node':
+      if (!next.nodes[ev.node.id]) next.order.push(ev.node.id)
+      next.nodes[ev.node.id] = ev.node
+      break
+    case 'tree:status': {
+      const n = next.nodes[ev.id]
+      if (n) next.nodes[ev.id] = { ...n, status: ev.status }
+      break
+    }
+    case 'log':
+      next.logs = [...state.logs, ev.entry].slice(-500)
+      break
+  }
+  return next
 }
