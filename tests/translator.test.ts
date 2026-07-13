@@ -57,6 +57,18 @@ describe('translate: subagent 掛載', () => {
     })
   })
 
+  it('Agent tool_use → subagent 節點(spike 校正:真實工具名為 Agent 非 Task)', () => {
+    const msg = {
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'tool_use', id: 'toolu_agent', name: 'Agent', input: { description: '總結 TypeScript 檔案', subagent_type: 'general-purpose' } }] },
+    }
+    expect(translate(msg)).toContainEqual({
+      kind: 'tree:node',
+      node: { id: 'toolu_agent', parentId: null, type: 'subagent', label: 'subagent: 總結 TypeScript 檔案', status: 'running' },
+    })
+  })
+
   it('subagent 內部的工具帶 parent_tool_use_id → 掛在 subagent 節點下', () => {
     const msg = {
       type: 'assistant',

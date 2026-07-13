@@ -1,7 +1,11 @@
 import type { FrontendEvent, NodeType } from './types'
 
+// spike 校正:實際 SDK 的 subagent 工具名是 `Agent`(input 帶 subagent_type/description);
+// 保留 `Task` 以相容舊版命名。
+const SUBAGENT_TOOLS = new Set(['Agent', 'Task'])
+
 export function toolTypeOf(name: string): NodeType {
-  if (name === 'Task') return 'subagent'
+  if (SUBAGENT_TOOLS.has(name)) return 'subagent'
   if (name === 'Skill') return 'skill'
   return 'tool'
 }
@@ -9,7 +13,7 @@ export function toolTypeOf(name: string): NodeType {
 function labelFor(name: string, input: any): string {
   if (name === 'Bash' && input?.command) return `Bash: ${input.command}`
   if (name === 'Skill' && input?.command) return `skill: ${input.command}`
-  if (name === 'Task' && input?.description) return `subagent: ${input.description}`
+  if (SUBAGENT_TOOLS.has(name) && input?.description) return `subagent: ${input.description}`
   return name
 }
 

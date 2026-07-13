@@ -5,19 +5,29 @@ type Decision =
   | { behavior: 'deny'; message: string }
 
 // 把 SDK 的 query() 包成 SessionManager 需要的 RunQuery 介面。
-// ⚠️ 依 NOTES.md(spike 產出)校正:canUseTool 的 toolUseId 來源、abortController 接法。
+// ✅ 已依 spike + SDK 型別定義(node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts)校正:
+//   - canUseTool 的第三參數欄位是 `toolUseID`(大寫 ID),值即 tool_use block 的 `toolu_...` id。
+//   - 中止用 Options.abortController;此處把外部 signal 橋接成 SDK 需要的 AbortController。
 export const realRunQuery = ({
   prompt,
   canUseTool,
+  signal,
 }: {
   prompt: AsyncIterable<any>
   canUseTool: (toolName: string, input: unknown, ctx: { toolUseId: string }) => Promise<Decision>
   signal: AbortSignal
 }): AsyncIterable<any> => {
+  // 外部只給我們一個 signal,SDK 卻要整個 AbortController,橋接兩者。
+  const abortController = new AbortController()
+  if (signal.aborted) abortController.abort()
+  else signal.addEventListener('abort', () => abortController.abort(), { once: true })
+
   const options: any = {
+    abortController,
     canUseTool: async (toolName: string, input: any, opts: any) => {
-      // toolUseId 來源:優先用 opts 提供的欄位;否則以工具名 + 時間戳當暫時 id。以 NOTES.md 為準修正。
-      const toolUseId = opts?.toolUseId ?? opts?.tool_use_id ?? `${toolName}-${Date.now()}`
+      // toolUseID 大寫;缺漏時以工具名 + 時間戳當暫時 id(理論上不會發生)。
+      const toolUseId = opts?.toolUseID ?? `${toolName}-${Date.now()}`
+      console.log('[agentAdapter] canUseTool', toolName, toolUseId)
       return canUseTool(toolName, input, { toolUseId })
     },
   }
