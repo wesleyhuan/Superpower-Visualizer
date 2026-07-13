@@ -28,5 +28,23 @@ export function translate(msg: any): FrontendEvent[] {
       }
     }
   }
+  if (msg?.type === 'user') {
+    const blocks = msg.message?.content ?? []
+    for (const b of blocks) {
+      if (b?.type === 'tool_result') {
+        const isError = !!b.is_error
+        out.push({ kind: 'tree:status', id: b.tool_use_id, status: isError ? 'error' : 'done' })
+        out.push({
+          kind: 'log',
+          entry: {
+            ts: Date.now(),
+            nodeId: b.tool_use_id,
+            text: typeof b.content === 'string' ? b.content : JSON.stringify(b.content),
+            level: isError ? 'error' : 'info',
+          },
+        })
+      }
+    }
+  }
   return out
 }
