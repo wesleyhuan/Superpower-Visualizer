@@ -25,6 +25,9 @@ export function translate(msg: any): FrontendEvent[] {
   if (msg?.type === 'assistant') {
     const blocks = msg.message?.content ?? []
     for (const b of blocks) {
+      if (b?.type === 'text' && typeof b.text === 'string' && b.text.trim() !== '') {
+        out.push({ kind: 'message', role: 'assistant', text: b.text.trim() })
+      }
       if (b?.type === 'tool_use') {
         const type = toolTypeOf(b.name)
         const label = labelFor(b.name, b.input)

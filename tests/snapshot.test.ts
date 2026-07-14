@@ -22,4 +22,14 @@ describe('SnapshotStore', () => {
     s.apply({ kind: 'log', entry: { ts: 1, nodeId: 'a', text: 'hi', level: 'info' } })
     expect(s.snapshot().logs).toHaveLength(1)
   })
+
+  it('message 會存進 messages 並出現在 snapshot', () => {
+    const s = new SnapshotStore()
+    s.apply({ kind: 'message', role: 'user', text: '重構登入' })
+    s.apply({ kind: 'message', role: 'assistant', text: '好的' })
+    expect(s.snapshot().messages).toEqual([
+      { role: 'user', text: '重構登入' },
+      { role: 'assistant', text: '好的' },
+    ])
+  })
 })

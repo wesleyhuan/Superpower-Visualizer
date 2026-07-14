@@ -17,12 +17,18 @@ export interface LogEntry {
   level: 'info' | 'error'
 }
 
+export interface ConversationEntry {
+  role: 'user' | 'assistant'
+  text: string
+}
+
 export type FrontendEvent =
   | { kind: 'tree:node'; node: TreeNode }
   | { kind: 'tree:status'; id: string; status: NodeStatus }
   | { kind: 'log'; entry: LogEntry }
   | { kind: 'await:tool'; toolUseId: string; name: string; input: unknown }
   | { kind: 'session:error'; message: string }
+  | { kind: 'message'; role: 'user' | 'assistant'; text: string }
 
 export type ControlCommand =
   | { type: 'pause' }

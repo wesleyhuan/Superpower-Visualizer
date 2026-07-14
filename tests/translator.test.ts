@@ -21,6 +21,25 @@ describe('translate: assistant tool_use', () => {
   })
 })
 
+describe('translate: assistant text → message', () => {
+  it('assistant 的 text block 轉成 message 事件(role assistant)', () => {
+    const msg = {
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'text', text: '我先研究專案結構。' }] },
+    }
+    expect(translate(msg)).toContainEqual({ kind: 'message', role: 'assistant', text: '我先研究專案結構。' })
+  })
+
+  it('空白 text 不產生 message', () => {
+    const msg = {
+      type: 'assistant', parent_tool_use_id: null,
+      message: { content: [{ type: 'text', text: '   ' }] },
+    }
+    expect(translate(msg).some((e) => e.kind === 'message')).toBe(false)
+  })
+})
+
 describe('translate: user tool_result', () => {
   it('成功結果 → tree:status done', () => {
     const msg = {

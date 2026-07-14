@@ -1,10 +1,12 @@
-import type { FrontendEvent, TreeNode, LogEntry } from './types'
+import type { FrontendEvent, TreeNode, LogEntry, ConversationEntry } from './types'
 
 export class SnapshotStore {
   private seq = 0
   private nodes = new Map<string, TreeNode>()
   private logs: LogEntry[] = []
+  private messages: ConversationEntry[] = []
   readonly logBufferMax = 500
+  readonly messageBufferMax = 500
 
   apply(event: FrontendEvent): { seq: number; event: FrontendEvent } {
     this.seq += 1
@@ -21,11 +23,15 @@ export class SnapshotStore {
         this.logs.push(event.entry)
         if (this.logs.length > this.logBufferMax) this.logs.shift()
         break
+      case 'message':
+        this.messages.push({ role: event.role, text: event.text })
+        if (this.messages.length > this.messageBufferMax) this.messages.shift()
+        break
     }
     return { seq: this.seq, event }
   }
 
-  snapshot(): { seq: number; nodes: TreeNode[]; logs: LogEntry[] } {
-    return { seq: this.seq, nodes: [...this.nodes.values()], logs: [...this.logs] }
+  snapshot(): { seq: number; nodes: TreeNode[]; logs: LogEntry[]; messages: ConversationEntry[] } {
+    return { seq: this.seq, nodes: [...this.nodes.values()], logs: [...this.logs], messages: [...this.messages] }
   }
 }

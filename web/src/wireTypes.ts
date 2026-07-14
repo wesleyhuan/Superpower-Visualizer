@@ -17,18 +17,24 @@ export interface LogEntry {
   level: 'info' | 'error'
 }
 
+export interface ConversationEntry {
+  role: 'user' | 'assistant'
+  text: string
+}
+
 export type FrontendEvent =
   | { kind: 'tree:node'; node: TreeNode }
   | { kind: 'tree:status'; id: string; status: NodeStatus }
   | { kind: 'log'; entry: LogEntry }
   | { kind: 'await:tool'; toolUseId: string; name: string; input: unknown }
   | { kind: 'session:error'; message: string }
+  | { kind: 'message'; role: 'user' | 'assistant'; text: string }
 
 export type ControlCommand =
   | { type: 'pause' }
   | { type: 'approve'; toolUseId: string; allow: boolean }
   | { type: 'followup'; text: string }
 
-export type SnapshotPacket = { type: 'snapshot'; seq: number; nodes: TreeNode[]; logs: LogEntry[]; workspace: string }
+export type SnapshotPacket = { type: 'snapshot'; seq: number; nodes: TreeNode[]; logs: LogEntry[]; workspace: string; messages: ConversationEntry[] }
 export type EventPacket = { type: 'event'; seq: number; event: FrontendEvent }
 export type Packet = SnapshotPacket | EventPacket

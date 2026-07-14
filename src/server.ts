@@ -38,13 +38,24 @@ export function createServer() {
   const mgr = new SessionManager({ runQuery: realRunQuery })
   const clients = new Set<WebSocket>()
 
-  wireEvents(mgr, store, (packet) => {
+  const broadcast = (packet: Packet) => {
     const data = JSON.stringify(packet)
     for (const ws of clients) if (ws.readyState === ws.OPEN) ws.send(data)
-  })
+  }
+  wireEvents(mgr, store, broadcast)
+
+  // 把使用者訊息也灌進事件管線,讓對話面板即時顯示、且能進 snapshot(斷線重連還原)。
+  const emitUserMessage = (text: string) => {
+    const t = text.trim()
+    if (!t) return
+    const { seq, event } = store.apply({ kind: 'message', role: 'user', text: t })
+    broadcast({ type: 'event', seq, event })
+  }
 
   app.post('/start', (req, res) => {
-    mgr.start(String(req.body?.prompt ?? ''))
+    const prompt = String(req.body?.prompt ?? '')
+    emitUserMessage(prompt)
+    mgr.start(prompt)
     res.json({ ok: true })
   })
 
@@ -53,7 +64,7 @@ export function createServer() {
     console.log('[server] control', cmd)
     if (cmd.type === 'pause') mgr.pause()
     else if (cmd.type === 'approve') mgr.approveTool(cmd.toolUseId, cmd.allow)
-    else if (cmd.type === 'followup') mgr.sendFollowup(cmd.text)
+    else if (cmd.type === 'followup') { emitUserMessage(cmd.text); mgr.sendFollowup(cmd.text) }
     res.json({ ok: true })
   })
 

@@ -1,0 +1,53 @@
+import type { TreeNode, NodeStatus } from './wireTypes'
+
+// 一個 agent 區塊:主 agent(node=null)或某個 subagent 節點。
+export interface AgentBlock {
+  id: string | null          // null = 主 agent
+  node: TreeNode | null      // subagent 節點(主 agent 為 null)
+  status: NodeStatus         // 主 agent 由所有節點推導;subagent 用其節點狀態
+  items: TreeNode[]          // 非 subagent 的工作項目(tool / skill),依 order
+  children: AgentBlock[]     // 它指派出的 subagent 區塊
+}
+
+interface State { nodes: Record<string, TreeNode>; order: string[] }
+
+// 主 agent 狀態:任一節點 awaiting → awaiting;否則有 running → running;
+// 否則有 error/failed → error;有節點且全 done → done;空 → running。
+function deriveStatus(all: TreeNode[]): NodeStatus {
+  if (all.some((n) => n.status === 'awaiting')) return 'awaiting'
+  if (all.some((n) => n.status === 'running')) return 'running'
+  if (all.some((n) => n.status === 'error' || n.status === 'failed')) return 'error'
+  if (all.length > 0 && all.every((n) => n.status === 'done')) return 'done'
+  return 'running'
+}
+
+export function buildAgentBlocks(state: State): { main: AgentBlock } {
+  const known = (pid: string | null): boolean => pid !== null && pid in state.nodes
+  // parentId 為 null 或指向不存在節點 → 視為 root(掛在主 agent 底下)。
+  const childrenOf = (parentId: string | null): TreeNode[] =>
+    state.order
+      .map((id) => state.nodes[id])
+      .filter((n) => (parentId === null ? !known(n.parentId) : n.parentId === parentId))
+
+  const makeBlock = (node: TreeNode): AgentBlock => {
+    const kids = childrenOf(node.id)
+    return {
+      id: node.id,
+      node,
+      status: node.status,
+      items: kids.filter((k) => k.type !== 'subagent'),
+      children: kids.filter((k) => k.type === 'subagent').map(makeBlock),
+    }
+  }
+
+  const roots = childrenOf(null)
+  const allNodes = state.order.map((id) => state.nodes[id])
+  const main: AgentBlock = {
+    id: null,
+    node: null,
+    status: deriveStatus(allNodes),
+    items: roots.filter((n) => n.type !== 'subagent'),
+    children: roots.filter((n) => n.type === 'subagent').map(makeBlock),
+  }
+  return { main }
+}

@@ -8,7 +8,7 @@ describe('applyPacket: snapshot 與 seq 去重', () => {
       seq: 5,
       nodes: [{ id: 'a', parentId: null, type: 'tool', label: 'x', status: 'done' }],
       logs: [{ ts: 1, nodeId: 'a', text: 'hi', level: 'info' }],
-      workspace: '',
+      workspace: '', messages: [],
     })
     expect(s.seq).toBe(5)
     expect(s.nodes['a'].status).toBe('done')
@@ -17,13 +17,34 @@ describe('applyPacket: snapshot 與 seq 去重', () => {
 
   it('snapshot 會帶入 workspace 路徑', () => {
     const s = applyPacket(initialState(), {
-      type: 'snapshot', seq: 1, nodes: [], logs: [], workspace: 'D:/proj',
+      type: 'snapshot', seq: 1, nodes: [], logs: [], workspace: 'D:/proj', messages: [],
     })
     expect(s.workspace).toBe('D:/proj')
   })
 
+  it('snapshot 會帶入 messages', () => {
+    const s = applyPacket(initialState(), {
+      type: 'snapshot', seq: 1, nodes: [], logs: [], workspace: '',
+      messages: [{ role: 'user', text: 'hi' }],
+    })
+    expect(s.messages).toEqual([{ role: 'user', text: 'hi' }])
+  })
+
+  it('message 事件會 append 到 messages', () => {
+    let s = applyPacket(initialState(), {
+      type: 'event', seq: 1, event: { kind: 'message', role: 'user', text: '重構登入' },
+    })
+    s = applyPacket(s, {
+      type: 'event', seq: 2, event: { kind: 'message', role: 'assistant', text: '好的' },
+    })
+    expect(s.messages).toEqual([
+      { role: 'user', text: '重構登入' },
+      { role: 'assistant', text: '好的' },
+    ])
+  })
+
   it('seq ≤ 目前 seq 的事件會被丟棄', () => {
-    let s = applyPacket(initialState(), { type: 'snapshot', seq: 5, nodes: [], logs: [], workspace: '' })
+    let s = applyPacket(initialState(), { type: 'snapshot', seq: 5, nodes: [], logs: [], workspace: '', messages: [] })
     s = applyPacket(s, {
       type: 'event', seq: 5,
       event: { kind: 'tree:node', node: { id: 'z', parentId: null, type: 'tool', label: 'z', status: 'running' } },

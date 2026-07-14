@@ -1,4 +1,4 @@
-import type { Packet, TreeNode, LogEntry } from './wireTypes'
+import type { Packet, TreeNode, LogEntry, ConversationEntry } from './wireTypes'
 
 export interface PendingApproval { toolUseId: string; name: string; input: unknown }
 
@@ -7,6 +7,7 @@ export interface SessionState {
   nodes: Record<string, TreeNode>
   order: string[]
   logs: LogEntry[]
+  messages: ConversationEntry[]
   pending: PendingApproval[]
   sessionEnded: boolean
   errorMessage: string | null
@@ -14,7 +15,7 @@ export interface SessionState {
 }
 
 export function initialState(): SessionState {
-  return { seq: 0, nodes: {}, order: [], logs: [], pending: [], sessionEnded: false, errorMessage: null, workspace: '' }
+  return { seq: 0, nodes: {}, order: [], logs: [], messages: [], pending: [], sessionEnded: false, errorMessage: null, workspace: '' }
 }
 
 export function applyPacket(state: SessionState, packet: Packet): SessionState {
@@ -22,7 +23,7 @@ export function applyPacket(state: SessionState, packet: Packet): SessionState {
     const nodes: Record<string, TreeNode> = {}
     const order: string[] = []
     for (const n of packet.nodes) { nodes[n.id] = n; order.push(n.id) }
-    return { seq: packet.seq, nodes, order, logs: [...packet.logs], pending: [], sessionEnded: false, errorMessage: null, workspace: packet.workspace ?? '' }
+    return { seq: packet.seq, nodes, order, logs: [...packet.logs], messages: [...(packet.messages ?? [])], pending: [], sessionEnded: false, errorMessage: null, workspace: packet.workspace ?? '' }
   }
   // event
   if (packet.seq <= state.seq) {
@@ -35,6 +36,7 @@ export function applyPacket(state: SessionState, packet: Packet): SessionState {
     nodes: { ...state.nodes },
     order: [...state.order],
     logs: state.logs,
+    messages: state.messages,
     pending: state.pending,
   }
   const ev = packet.event
@@ -50,6 +52,9 @@ export function applyPacket(state: SessionState, packet: Packet): SessionState {
     }
     case 'log':
       next.logs = [...state.logs, ev.entry].slice(-500)
+      break
+    case 'message':
+      next.messages = [...state.messages, { role: ev.role, text: ev.text }].slice(-500)
       break
     case 'await:tool': {
       next.pending = [...state.pending, { toolUseId: ev.toolUseId, name: ev.name, input: ev.input }]
