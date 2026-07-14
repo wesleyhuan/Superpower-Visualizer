@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { applyPacket, resolvePending, initialState, type SessionState } from './store'
 import type { Packet, ControlCommand } from './wireTypes'
 
-interface Deps { wsUrl?: string; WebSocketImpl?: typeof WebSocket; fetchImpl?: typeof fetch }
+export interface SessionDeps { wsUrl?: string; WebSocketImpl?: typeof WebSocket; fetchImpl?: typeof fetch }
 
-export function useSession(deps: Deps = {}) {
+export function useSession(deps: SessionDeps = {}) {
   const WS = deps.WebSocketImpl ?? WebSocket
   const doFetch = deps.fetchImpl ?? fetch
   const wsUrl = deps.wsUrl ?? `ws://${location.hostname}:3001`

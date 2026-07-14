@@ -1,0 +1,90 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { App } from '../src/App'
+
+// 假 WebSocket:可手動觸發 onopen / onmessage
+class FakeWS {
+  onopen: (() => void) | null = null
+  onmessage: ((e: { data: string }) => void) | null = null
+  onclose: (() => void) | null = null
+  readyState = 1
+  static OPEN = 1
+  sent: string[] = []
+  constructor(public url: string) { FakeWS.last = this }
+  send(d: string) { this.sent.push(d) }
+  close() { this.readyState = 3; this.onclose?.() }
+  static last: FakeWS | null = null
+}
+
+let fetchImpl: ReturnType<typeof vi.fn>
+
+function push(data: unknown) {
+  act(() => { FakeWS.last!.onmessage?.({ data: JSON.stringify(data) }) })
+}
+const snapshot = (over: Record<string, unknown> = {}) =>
+  ({ type: 'snapshot', seq: 0, nodes: [], logs: [], messages: [], workspace: '', ...over })
+
+function renderApp() {
+  render(<App deps={{ WebSocketImpl: FakeWS as unknown as typeof WebSocket, fetchImpl: fetchImpl as unknown as typeof fetch, wsUrl: 'ws://x' }} />)
+  act(() => { FakeWS.last!.onopen?.() })
+}
+function bodyOf(path: string) {
+  const call = fetchImpl.mock.calls.find((c) => c[0] === path)
+  return call ? JSON.parse((call[1] as RequestInit).body as string) : null
+}
+
+describe('App 整合流程(假 WebSocket 驅動)', () => {
+  beforeEach(() => {
+    FakeWS.last = null
+    fetchImpl = vi.fn().mockResolvedValue({ ok: true })
+  })
+
+  it('未啟動時輸入任務按送出 → POST /start 帶 prompt', () => {
+    renderApp()
+    push(snapshot())
+    fireEvent.change(screen.getByPlaceholderText(/初始任務/), { target: { value: '重構登入' } })
+    fireEvent.click(screen.getByRole('button', { name: /送出/ }))
+    expect(bodyOf('/start')).toEqual({ prompt: '重構登入' })
+  })
+
+  it('await:tool → 跳出核准 modal;按核准 → POST /control approve 且 modal 關閉', async () => {
+    renderApp()
+    push(snapshot())
+    push({ type: 'event', seq: 1, event: { kind: 'tree:node', node: { id: 'toolu_1', parentId: null, type: 'tool', label: 'Write: a.ts', status: 'running' } } })
+    push({ type: 'event', seq: 2, event: { kind: 'await:tool', toolUseId: 'toolu_1', name: 'Write', input: { file_path: 'a.ts' } } })
+
+    expect(await screen.findByText('等待你核准')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '核准' }))
+
+    expect(bodyOf('/control')).toEqual({ type: 'approve', toolUseId: 'toolu_1', allow: true })
+    await waitFor(() => expect(screen.queryByText('等待你核准')).toBeNull()) // 樂觀移除 → 關閉
+  })
+
+  it('已啟動後送出 → POST /control followup', () => {
+    renderApp()
+    push(snapshot({ messages: [{ role: 'user', text: '第一個任務' }] }))
+    fireEvent.change(screen.getByPlaceholderText(/派新任務/), { target: { value: '再做一件事' } })
+    fireEvent.click(screen.getByRole('button', { name: /送出/ }))
+    expect(bodyOf('/control')).toEqual({ type: 'followup', text: '再做一件事' })
+  })
+
+  it('暫停鈕 → POST /control pause', () => {
+    renderApp()
+    push(snapshot({ messages: [{ role: 'user', text: 'x' }] }))
+    fireEvent.click(screen.getByRole('button', { name: '暫停 agent' }))
+    expect(bodyOf('/control')).toEqual({ type: 'pause' })
+  })
+
+  it('事件流會渲染對話與 agent 區塊', async () => {
+    renderApp()
+    push(snapshot())
+    push({ type: 'event', seq: 1, event: { kind: 'message', role: 'user', text: '幫我做計算機' } })
+    push({ type: 'event', seq: 2, event: { kind: 'message', role: 'assistant', text: '好的,我開始。' } })
+    push({ type: 'event', seq: 3, event: { kind: 'tree:node', node: { id: 'b', parentId: null, type: 'tool', label: 'Bash: ls', status: 'done' } } })
+
+    // 使用者訊息同時出現在對話 bubble 與主 agent 區塊標題,故至少一個
+    expect((await screen.findAllByText('幫我做計算機')).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('好的,我開始。')).toBeInTheDocument()   // agent 文字回覆(對話)
+    expect(screen.getByText('Bash: ls')).toBeInTheDocument()        // agent 區塊工作項目
+  })
+})
