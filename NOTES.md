@@ -65,3 +65,14 @@
     同一對話,不應先 pause。ControlBar 在 pause 後仍 enabled,語意上比較接近「開新任務」。
   - **附帶觀察**:nested agent(Agent SDK 內的 claude 子程序)寫相對路徑檔時,cwd 落在專案名的連字號變體目錄
     (`claude-code-superpower-visualizer`),非 server 的 cwd。與 pause 無關,但寫檔任務給絕對路徑較保險。
+
+## cwd / workspace(2026-07-14 診斷 + 強化)
+
+- **診斷結論:並非 cwd 解析 bug。** 實測 agent 的 Bash `pwd` = 正確的底線專案路徑;給「相對路徑」的 Write,
+  SDK 收到的 `file_path` 也是正確的底線絕對路徑、檔案落在專案根。先前跑到連字號目錄,是那幾個 prompt 講
+  「在專案根目錄建立…」時 **agent 自行幻想了一個絕對路徑**(用錯的專案名),屬一次性幻覺,非系統性問題。
+  核准框會顯示完整 `file_path`,真人操作看得到就能拒絕(自動核准的 E2E 才沒擋)。
+- **強化(已做):** `agentAdapter.buildOptions` 明確把 SDK `options.cwd` pin 到 `resolveWorkspace()`
+  (`process.env.AGENT_WORKSPACE?.trim() || process.cwd()`),不再隱式依賴啟動當下的 cwd,並可指向任一目標專案。
+  - 驗證:`AGENT_WORKSPACE=<專案>/web npm run dev` 後,agent 的 `pwd` = `.../superpower_visualizer/web`(生效)。
+  - 單元:`tests/agentAdapter.test.ts`(resolveWorkspace 三情境 + buildOptions 的 cwd/abortController/toolUseID)。

@@ -52,6 +52,14 @@ cd web && npm run dev
 瀏覽器開 <http://localhost:5173>,標題旁 🟢 代表已連上後端。在輸入框打一段任務
 (例:`請用 Grep 找出所有 .ts 檔並用一個 subagent 總結`)→ 按「啟動 agent」。
 
+**指定 agent 的工作目錄:** 後端預設讓 agent 在 `process.cwd()`(即啟動 `npm run dev` 的目錄)操作。
+要監控**別的**專案時,用 `AGENT_WORKSPACE` 環境變數把 agent 的工作目錄指過去——agent 的 Read / Write / Bash
+相對路徑都會以它為基準:
+
+```bash
+AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
+```
+
 **操作:**
 - 樹上即時長出節點,狀態圖示:⏳ 執行中 · 🟡 等待核准 · ✅ 完成 · ❌ / 💥 錯誤。
 - agent 要用**需權限的工具**(Bash / Write / Edit 等)時,下方出現核准框——按「核准」放行、「拒絕」擋下。
