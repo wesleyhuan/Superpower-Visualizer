@@ -8,14 +8,22 @@ describe('applyPacket: snapshot 與 seq 去重', () => {
       seq: 5,
       nodes: [{ id: 'a', parentId: null, type: 'tool', label: 'x', status: 'done' }],
       logs: [{ ts: 1, nodeId: 'a', text: 'hi', level: 'info' }],
+      workspace: '',
     })
     expect(s.seq).toBe(5)
     expect(s.nodes['a'].status).toBe('done')
     expect(s.logs).toHaveLength(1)
   })
 
+  it('snapshot 會帶入 workspace 路徑', () => {
+    const s = applyPacket(initialState(), {
+      type: 'snapshot', seq: 1, nodes: [], logs: [], workspace: 'D:/proj',
+    })
+    expect(s.workspace).toBe('D:/proj')
+  })
+
   it('seq ≤ 目前 seq 的事件會被丟棄', () => {
-    let s = applyPacket(initialState(), { type: 'snapshot', seq: 5, nodes: [], logs: [] })
+    let s = applyPacket(initialState(), { type: 'snapshot', seq: 5, nodes: [], logs: [], workspace: '' })
     s = applyPacket(s, {
       type: 'event', seq: 5,
       event: { kind: 'tree:node', node: { id: 'z', parentId: null, type: 'tool', label: 'z', status: 'running' } },

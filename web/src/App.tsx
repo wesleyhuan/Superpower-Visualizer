@@ -13,7 +13,12 @@ export function App() {
 
   return (
     <div style={{ fontFamily: 'sans-serif', padding: 16 }}>
-      <h1>Superpower Visualizer {connected ? '🟢' : '🔴'}</h1>
+      <h1 style={{ marginBottom: 4 }}>Superpower Visualizer {connected ? '🟢' : '🔴'}</h1>
+      {state.workspace && (
+        <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>
+          📁 工作目錄:<code>{state.workspace}</code>
+        </div>
+      )}
 
       {state.sessionEnded && (
         <div style={{ background: '#fee', padding: 8, marginBottom: 8 }}>

@@ -10,10 +10,11 @@ export interface SessionState {
   pending: PendingApproval[]
   sessionEnded: boolean
   errorMessage: string | null
+  workspace: string
 }
 
 export function initialState(): SessionState {
-  return { seq: 0, nodes: {}, order: [], logs: [], pending: [], sessionEnded: false, errorMessage: null }
+  return { seq: 0, nodes: {}, order: [], logs: [], pending: [], sessionEnded: false, errorMessage: null, workspace: '' }
 }
 
 export function applyPacket(state: SessionState, packet: Packet): SessionState {
@@ -21,7 +22,7 @@ export function applyPacket(state: SessionState, packet: Packet): SessionState {
     const nodes: Record<string, TreeNode> = {}
     const order: string[] = []
     for (const n of packet.nodes) { nodes[n.id] = n; order.push(n.id) }
-    return { seq: packet.seq, nodes, order, logs: [...packet.logs], pending: [], sessionEnded: false, errorMessage: null }
+    return { seq: packet.seq, nodes, order, logs: [...packet.logs], pending: [], sessionEnded: false, errorMessage: null, workspace: packet.workspace ?? '' }
   }
   // event
   if (packet.seq <= state.seq) {

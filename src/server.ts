@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { SnapshotStore } from './snapshot'
 import { SessionManager } from './sessionManager'
 import { translate } from './translator'
-import { realRunQuery } from './agentAdapter'
+import { realRunQuery, resolveWorkspace } from './agentAdapter'
 import type { ControlCommand } from './types'
 
 type Packet = { type: 'event'; seq: number; event: unknown }
@@ -61,7 +61,7 @@ export function createServer() {
   const wss = new WebSocketServer({ server })
   wss.on('connection', (ws) => {
     clients.add(ws)
-    ws.send(JSON.stringify({ type: 'snapshot', ...store.snapshot() }))
+    ws.send(JSON.stringify({ type: 'snapshot', workspace: resolveWorkspace(), ...store.snapshot() }))
     ws.on('close', () => clients.delete(ws))
   })
   return { app, server, wss }

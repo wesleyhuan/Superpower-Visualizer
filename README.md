@@ -60,6 +60,8 @@ cd web && npm run dev
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 ```
 
+前端標題列會顯示目前的工作目錄(📁),讓你一眼確認 agent 在哪個專案動手。
+
 **操作:**
 - 樹上即時長出節點,狀態圖示:⏳ 執行中 · 🟡 等待核准 · ✅ 完成 · ❌ / 💥 錯誤。
 - agent 要用**需權限的工具**(Bash / Write / Edit 等)時,下方出現核准框——按「核准」放行、「拒絕」擋下。

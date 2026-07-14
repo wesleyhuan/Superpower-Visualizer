@@ -29,6 +29,6 @@ export type ControlCommand =
   | { type: 'approve'; toolUseId: string; allow: boolean }
   | { type: 'followup'; text: string }
 
-export type SnapshotPacket = { type: 'snapshot'; seq: number; nodes: TreeNode[]; logs: LogEntry[] }
+export type SnapshotPacket = { type: 'snapshot'; seq: number; nodes: TreeNode[]; logs: LogEntry[]; workspace: string }
 export type EventPacket = { type: 'event'; seq: number; event: FrontendEvent }
 export type Packet = SnapshotPacket | EventPacket
