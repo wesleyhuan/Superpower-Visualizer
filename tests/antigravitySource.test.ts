@@ -10,7 +10,8 @@ import type { FrontendEvent } from '../src/types'
 function varint(n: number): number[] { const b: number[] = []; while (n > 0x7f) { b.push((n & 0x7f) | 0x80); n >>>= 7 } b.push(n); return b }
 function str(fieldNo: number, s: string): Buffer { const by = Buffer.from(s, 'utf8'); return Buffer.concat([Buffer.from(varint((fieldNo << 3) | 2)), Buffer.from(varint(by.length)), by]) }
 function toolPayload(): Buffer {
-  const inner = Buffer.concat([str(1, 'abc'), str(2, 'view_file'), str(3, '{"toolAction":"Read x","toolSummary":"Read x"}')])
+  // toolAction(為什麼)≠ toolSummary(做什麼)→ reason 會帶 toolAction。
+  const inner = Buffer.concat([str(1, 'abc'), str(2, 'view_file'), str(3, '{"toolAction":"Read the request","toolSummary":"Read x"}')])
   return Buffer.concat([Buffer.from(varint((4 << 3) | 2)), Buffer.from(varint(inner.length)), inner])
 }
 
@@ -31,7 +32,7 @@ describe('AntigravitySource', () => {
     src.start(); src.stop()
     const node = got.find((e) => e.kind === 'tree:node') as any
     expect(node?.node.label).toContain('view_file')
-    expect(node?.node.reason).toBe('Read x')
+    expect(node?.node.reason).toBe('Read the request')
   })
 
   it('游標只吃新增 step,不重複既有', () => {
