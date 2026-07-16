@@ -110,7 +110,7 @@ export function pickLatestSession(root = join(homedir(), '.claude', 'projects'))
     console.error(`[tail] 找不到 ${root}`)
     return null
   }
-  let best: { file: string; mtime: number } | null = null
+  const found: { file: string; mtime: number }[] = []
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const p = join(dir, name)
@@ -119,7 +119,7 @@ export function pickLatestSession(root = join(homedir(), '.claude', 'projects'))
         if (name === 'subagents') continue // 子檔不算獨立 session
         walk(p)
       } else if (name.endsWith('.jsonl')) {
-        if (!best || st.mtimeMs > best.mtime) best = { file: p, mtime: st.mtimeMs }
+        found.push({ file: p, mtime: st.mtimeMs })
       }
     }
   }
@@ -128,5 +128,6 @@ export function pickLatestSession(root = join(homedir(), '.claude', 'projects'))
   } catch (err) {
     console.error('[tail] 掃描 session 失敗:', err)
   }
-  return best?.file ?? null
+  if (!found.length) return null
+  return found.reduce((a, b) => (b.mtime > a.mtime ? b : a)).file
 }

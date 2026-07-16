@@ -1,11 +1,12 @@
 import { SnapshotStore } from './snapshot'
 import { TranscriptSource, readWorkspace } from './transcriptSource'
 import { ReActAssembler } from './reactAssembler'
+import type { Source } from './sourceSystems'
 import type { FrontendEvent } from './types'
 
 export type Mode = 'control' | 'observe'
 type Packet = { type: 'event'; seq: number; event: unknown } | Record<string, unknown>
-type MakeSource = (file: string, emit: (events: FrontendEvent[]) => void) => TranscriptSource
+type MakeSource = (file: string, emit: (events: FrontendEvent[]) => void) => Source
 
 // 管理「目前的事件來源」與模式切換,共用同一個 store + broadcast:
 //  - control:外部(SessionManager)直接餵事件,這裡不介入。
@@ -14,7 +15,7 @@ type MakeSource = (file: string, emit: (events: FrontendEvent[]) => void) => Tra
 export class SourceController {
   mode: Mode = 'control'
   workspace: string
-  private source: TranscriptSource | null = null
+  private source: Source | null = null
   private backfilling = false
 
   constructor(
@@ -48,14 +49,18 @@ export class SourceController {
     this.broadcast(this.snapshot())
   }
 
-  observe(file: string, makeSource: MakeSource = (f, emit) => new TranscriptSource(f, emit)): void {
+  observe(
+    file: string,
+    makeSource: MakeSource = (f, emit) => new TranscriptSource(f, emit),
+    resolveWorkspace: (f: string) => string = readWorkspace, // 依系統注入(Claude / Antigravity)
+  ): void {
     console.log('[controller] 切換到 observe:', file)
     this.onEnterObserve()
     this.source?.stop()
     this.store.reset()
     this.assembler.reset()
     this.mode = 'observe'
-    this.workspace = readWorkspace(file)
+    this.workspace = resolveWorkspace(file)
 
     this.backfilling = true
     this.source = makeSource(file, (events) => this.ingest(events))

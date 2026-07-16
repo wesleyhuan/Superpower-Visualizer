@@ -4,7 +4,8 @@ import { SnapshotStore } from './snapshot'
 import { SessionManager } from './sessionManager'
 import { SourceController } from './sourceController'
 import { ReActAssembler } from './reactAssembler'
-import { listSessions } from './sessions'
+import { makeObserveSource, workspaceFor, listObservableSessions } from './sourceSystems'
+import type { SourceSystem } from './sourceSystems'
 import { translate } from './translator'
 import { realRunQuery, resolveWorkspace } from './agentAdapter'
 import type { ControlCommand } from './types'
@@ -72,16 +73,20 @@ export function createServer() {
     }
   }
 
-  // 列出可觀察的外部 session(給前端「來源」下拉用)。
-  app.get('/sessions', (_req, res) => {
-    res.json({ sessions: listSessions() })
+  // 依系統把 query/body 的 system 正規化(預設 claude)。
+  const asSystem = (v: unknown): SourceSystem => (v === 'antigravity' ? 'antigravity' : 'claude')
+
+  // 列出可觀察的外部 session(給前端「來源」下拉用)。system=claude|antigravity。
+  app.get('/sessions', (req, res) => {
+    res.json({ sessions: listObservableSessions(asSystem(req.query.system)) })
   })
 
-  // 切到 Route A(唯讀觀察某個外部 session)。
+  // 切到 Route A(唯讀觀察某個外部 session)。system 決定來源型別(.jsonl / .db)。
   app.post('/observe', (req, res) => {
     const file = String(req.body?.file ?? '')
     if (!file) return res.status(400).json({ ok: false, error: 'missing file' })
-    controller.observe(file)
+    const system = asSystem(req.body?.system)
+    controller.observe(file, (f, emit) => makeObserveSource(system, f, emit), (f) => workspaceFor(system, f))
     res.json({ ok: true })
   })
 
