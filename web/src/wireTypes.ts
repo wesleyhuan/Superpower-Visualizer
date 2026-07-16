@@ -37,15 +37,26 @@ export type ControlCommand =
   | { type: 'followup'; text: string }
 
 export type Mode = 'control' | 'observe'
+export type SourceSystem = 'claude' | 'antigravity'
 
-// 可觀察的外部 Claude Code session(GET /sessions)
-export interface SessionInfo {
+// 可觀察的外部 session(GET /sessions?system=)。依系統有不同顯示欄位。
+export interface ClaudeSessionInfo {
+  system: 'claude'
   file: string
   project: string
   cwd: string
   mtime: number
   subagents: number
 }
+export interface AntigravitySessionInfo {
+  system: 'antigravity'
+  file: string
+  identity: string
+  cwd: string
+  mtime: number
+  steps: number
+}
+export type SessionInfo = ClaudeSessionInfo | AntigravitySessionInfo
 
 export type SnapshotPacket = { type: 'snapshot'; seq: number; nodes: TreeNode[]; logs: LogEntry[]; workspace: string; messages: ConversationEntry[]; mode?: Mode }
 export type EventPacket = { type: 'event'; seq: number; event: FrontendEvent }

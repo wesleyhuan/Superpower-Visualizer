@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { applyPacket, resolvePending, initialState, type SessionState } from './store'
-import type { Packet, ControlCommand, SessionInfo } from './wireTypes'
+import type { Packet, ControlCommand, SessionInfo, SourceSystem } from './wireTypes'
 
 export interface SessionDeps { wsUrl?: string; WebSocketImpl?: typeof WebSocket; fetchImpl?: typeof fetch }
 
@@ -59,12 +59,12 @@ export function useSession(deps: SessionDeps = {}) {
     setState((s) => resolvePending(s, toolUseId)) // 樂觀更新
   }, [control])
 
-  // Route A/B 切換
-  const observe = useCallback((file: string) => post('/observe', { file }), [post])
+  // Route A/B 切換。observe 帶 system(claude 讀 .jsonl、antigravity 讀 .db)。
+  const observe = useCallback((system: SourceSystem, file: string) => post('/observe', { system, file }), [post])
   const newAgent = useCallback(() => post('/new-agent', {}), [post])
-  const loadSessions = useCallback(async (): Promise<SessionInfo[]> => {
+  const loadSessions = useCallback(async (system: SourceSystem): Promise<SessionInfo[]> => {
     try {
-      const res = await doFetch('/sessions')
+      const res = await doFetch(`/sessions?system=${system}`)
       const data = await res.json()
       return data.sessions ?? []
     } catch (err) {

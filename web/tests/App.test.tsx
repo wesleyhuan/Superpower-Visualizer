@@ -83,11 +83,10 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     expect(screen.getByRole('button', { name: /送出/ })).toBeDisabled()
   })
 
-  it('來源下拉:載入 sessions、點某個 → POST /observe;點新 Agent → POST /new-agent', async () => {
-    // 讓 /sessions 回一筆,其餘 POST 回 ok
+  it('來源下拉:先選 Claude → 載入 sessions → 點某個 → POST /observe;點新 Agent → POST /new-agent', async () => {
     fetchImpl = vi.fn((path: string) => {
-      if (path === '/sessions') return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
-        { file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-HW-chess', cwd: 'C:/proj', mtime: Date.now(), subagents: 3 },
+      if (path.startsWith('/sessions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
+        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-HW-chess', cwd: 'C:/proj', mtime: Date.now(), subagents: 3 },
       ] }) })
       return Promise.resolve({ ok: true })
     }) as unknown as typeof fetchImpl
@@ -95,13 +94,34 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     push(snapshot())
 
     fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    fireEvent.click(screen.getByText(/觀察 Claude session/))
     const item = await screen.findByText('HW/chess')
     fireEvent.click(item)
-    expect(bodyOf('/observe')).toEqual({ file: 'C:/proj/s.jsonl' })
+    expect(bodyOf('/observe')).toEqual({ system: 'claude', file: 'C:/proj/s.jsonl' })
 
     fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
     fireEvent.click(await screen.findByText(/新 Agent/))
     expect(bodyOf('/new-agent')).toEqual({})
+  })
+
+  it('來源下拉:選 Antigravity → 帶 system 載入 → 點對話(顯示 identity)→ POST /observe 帶 system', async () => {
+    fetchImpl = vi.fn((path: string) => {
+      if (path.startsWith('/sessions')) {
+        expect(path).toBe('/sessions?system=antigravity') // 帶 system query
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
+          { system: 'antigravity', file: 'C:/ag/conv1.db', identity: 'teamwork_preview_orchestrator', cwd: 'C:/ag', mtime: Date.now(), steps: 173 },
+        ] }) })
+      }
+      return Promise.resolve({ ok: true })
+    }) as unknown as typeof fetchImpl
+    renderApp()
+    push(snapshot())
+
+    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    fireEvent.click(screen.getByText(/觀察 Antigravity 對話/))
+    const item = await screen.findByText('teamwork_preview_orchestrator')
+    fireEvent.click(item)
+    expect(bodyOf('/observe')).toEqual({ system: 'antigravity', file: 'C:/ag/conv1.db' })
   })
 
   it('事件流會渲染對話與 agent 區塊', async () => {
