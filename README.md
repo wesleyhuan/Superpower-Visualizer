@@ -1,183 +1,222 @@
 # Superpower Visualizer
 
-即時**監控並介入** Claude agent 開發過程的本地 Web App。UI 本身就是指揮官——透過
-[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk) 啟動並驅動 agent,把它的
-工具呼叫、subagent、skill 即時畫成一棵互動樹 + 一條活動日誌流,並讓你在它動手前**核准 / 拒絕**
-需要權限的工具、隨時**暫停**、或**派新任務**。
+**English** | [繁體中文](README.zh-TW.md)
 
-**兩種模式(同一個伺服器、同一套 UI,標題列「來源」下拉切換):**
+A local web app that **watches and steers** a Claude agent while it works. The UI *is* the
+commander: it launches and drives the agent through the
+[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk), renders its tool calls, subagents,
+and skills live as an interactive tree plus an activity log, and lets you **approve / deny**
+permissioned tools before they run, **pause** at any time, or **send a new task**.
 
-- **操控(Route B)** — UI 自己用 Agent SDK 啟動 agent,可核准 / 暫停 / 派任務。
-- **觀察(Route A,唯讀)** — 旁觀**其他 coding agent 的 session**,即時重建成同一套互動樹 + 對話。
-  支援兩種系統(來源下拉先選系統):
-  - **Claude Code** — 讀 `~/.claude/projects/<slug>/<session>.jsonl`(主檔 + `subagents/`)。
-  - **Antigravity**(Google)— 讀 `~/.gemini/antigravity/conversations/<id>.db`(SQLite,steps 為 protobuf);
-    每個工具自帶 `toolAction`,直接當 ReAct 的「想法」。v1 為扁平(一個對話 = 一個 agent 區塊)。
-  因為是歷史紀錄,觀察模式不會有核准框,也不能暫停 / 派任務(輸入框顯示「觀察中(唯讀)」)。
+**Two modes (one server, one UI, switched from the "source" dropdown in the header):**
+
+- **Control (Route B)** — the UI launches the agent itself via the Agent SDK; you can approve /
+  pause / send tasks.
+- **Observe (Route A, read-only)** — watch **another coding agent's session**, rebuilt live into
+  the same interactive tree + conversation. Two systems are supported (pick the system first in the
+  dropdown):
+  - **Claude Code** — reads `~/.claude/projects/<slug>/<session>.jsonl` (main file + `subagents/`).
+  - **Antigravity** (Google) — reads `~/.gemini/antigravity/conversations/<id>.db` (SQLite, with
+    protobuf-encoded steps); each tool carries its own `toolAction`, used directly as the ReAct
+    "thought". v1 is flat (one conversation = one agent block).
+  Because a transcript is a historical record, observe mode has no approval prompts and can't pause
+  or send tasks (the input box shows "observing (read-only)").
 
 ```
-┌─────────── 瀏覽器 (:5173) ───────────┐         ┌──────── 後端 (:3001) ────────┐
-│  互動樹  │  活動日誌  │ 核准佇列 │控制列│         │  Express + WebSocketServer   │
+┌─────────── Browser (:5173) ──────────┐         ┌──────── Backend (:3001) ─────┐
+│  Tree  │  Activity log │ Approvals │… │         │  Express + WebSocketServer   │
 └───────────────┬──────────────────────┘         │  SessionManager ── canUseTool │
-                │  WS 事件流 (下行, 帶 seq)         │        │                      │
+                │  WS event stream (down, w/ seq)  │        │                      │
                 │◀─────────────────────────────────┤   translate() → SnapshotStore │
-                │  HTTP /start /control (上行)      │        │                      │
-                └─────────────────────────────────▶│   Agent SDK query()  ─────────┼──▶ 真實 agent
+                │  HTTP /start /control (up)        │        │                      │
+                └─────────────────────────────────▶│   Agent SDK query()  ─────────┼──▶ real agent
                                                     └──────────────────────────────┘
 ```
 
-- **下行**:事件經 `translate()`(Route B 串流)或 `translateTranscript()`(Route A 逐字稿)轉成前端事件、
-  進 `SnapshotStore`(帶單調遞增 `seq`),用 WebSocket 廣播。重連時先送 snapshot,再送增量事件;前端用 `seq` 去重。
-- **上行**:核准 / 暫停 / 派任務 POST `/control`,啟動 POST `/start`;切換來源 POST `/observe`、`/new-agent`;
-  列 session `GET /sessions`。
-- **後端是唯一真相來源**。一次觀察 / 操控**一個** session,由 `SourceController` 管理切換。
+- **Downstream**: events pass through `translate()` (Route B stream) or `translateTranscript()` /
+  `translateAntigravity()` (Route A transcripts), land in the `SnapshotStore` (with a monotonic
+  `seq`), and are broadcast over WebSocket. On reconnect the server sends a snapshot first, then
+  incremental events; the client dedupes by `seq`.
+- **Upstream**: approve / pause / send-task via POST `/control`, start via POST `/start`; switch
+  source via POST `/observe`, `/new-agent`; list sessions via `GET /sessions?system=`.
+- **The backend is the single source of truth.** Exactly **one** session is observed / controlled at
+  a time, with switching managed by `SourceController`.
 
-## 需求
+## Requirements
 
-- Node.js 18+(實測 v24)
-- **已登入的 Claude Code CLI** —— Agent SDK 會沿用它的憑證,**不需要另設 `ANTHROPIC_API_KEY`**。
-  確認方式:`claude --version` 有輸出即代表已安裝並登入。
+- Node.js 18+ (tested on v24)
+- **A logged-in Claude Code CLI** — the Agent SDK reuses its credentials, so **no `ANTHROPIC_API_KEY`
+  is needed**. To confirm: `claude --version` producing output means it's installed and logged in.
 
-## 安裝
+## Install
 
 ```bash
-# 後端(專案根目錄)
+# Backend (repo root)
 npm install
 
-# 前端
+# Frontend
 cd web && npm install && cd ..
 ```
 
-## 啟動
+## Run
 
-開**兩個終端**,分別跑後端與前端(兩者都要開著):
+Open **two terminals**, one for the backend and one for the frontend (both must stay running):
 
 ```bash
-# 終端 1 — 後端(:3001)。在專案根目錄
+# Terminal 1 — backend (:3001), from the repo root
 npm run dev
 
-# 終端 2 — 前端(:5173)
+# Terminal 2 — frontend (:5173)
 cd web && npm run dev
 ```
 
-瀏覽器開 <http://localhost:5173>,標題列右上出現 🟢「已連線」即代表接上後端。
+Open <http://localhost:5173>; a green 🟢 "connected" in the top-right means the backend is wired up.
 
-**停止:** 在各自的終端按 `Ctrl+C`。若 port 被占住(EADDRINUSE :3001),先找出並砍掉殘留行程:
+**To stop:** `Ctrl+C` in each terminal. If a port is stuck (EADDRINUSE :3001), find and kill the
+leftover process:
 
 ```bash
-# 找出占用 3001 的 PID 再砍(5173 同理)
+# Find the PID holding 3001, then kill it (5173 is the same)
 netstat -ano | grep ":3001" | grep LISTENING
 powershell -Command "Stop-Process -Id <PID> -Force"
 ```
 
-## 使用方式
+## Usage
 
-標題列右上的「**來源**」下拉決定目前是哪一種模式:
+The **"source"** dropdown in the top-right decides which mode you're in:
 
-### A. 操控模式(Route B)— 自己啟動並指揮 agent
+### A. Control mode (Route B) — launch and direct an agent yourself
 
-1. 確認來源下拉顯示「**操控模式**」(預設;若在觀察中,點下拉選「＋ 新 Agent(操控)」切回)。
-2. 在最下方輸入框打一段任務,例:`請用 Grep 找出所有 .ts 檔並用一個 subagent 總結`,按「送出」啟動。
-3. 左側「Agents」即時長出節點(狀態:⏳ 執行中 · 🟡 等待核准 · ✅ 完成 · ❌ / 💥 錯誤);右側「對話」顯示 agent 的回覆。
-4. agent 要用**需權限的工具**(Bash / Write / Edit 等)時會**跳出核准視窗**——按「核准」放行、「拒絕」擋下。
-   (唯讀工具如 Read / Grep 在 default 權限模式自動放行,不跳核准。)
-5. 「暫停」中止目前執行;啟動後在輸入框再打字送出 = **派新任務**(排進 agent 輸入佇列)。
+1. Make sure the source dropdown shows "**control mode**" (the default; if you're observing, open the
+   dropdown and pick "＋ New Agent (control)" to switch back).
+2. Type a task in the box at the bottom, e.g. `Use Grep to find all .ts files and summarize them with
+   a subagent`, and hit "Send" to start.
+3. The left "Agents" panel grows nodes live (status: ⏳ running · 🟡 awaiting approval · ✅ done ·
+   ❌ / 💥 error); the right "Conversation" shows the agent's replies.
+4. When the agent wants a **permissioned tool** (Bash / Write / Edit, etc.) an **approval dialog pops
+   up** — "Approve" to allow, "Deny" to block. (Read-only tools like Read / Grep auto-run under the
+   default permission mode without prompting.)
+5. "Pause" aborts the current run; after starting, typing again and sending = **a new task** (queued
+   into the agent's input).
 
-**指定 agent 的工作目錄:** 預設在 `process.cwd()`(啟動 `npm run dev` 的目錄)操作。要它在**別的**專案動手,
-用 `AGENT_WORKSPACE` 指過去(Read / Write / Bash 的相對路徑都以它為基準),標題列會顯示目前工作目錄:
+**Setting the agent's working directory:** it operates in `process.cwd()` by default (the directory
+you ran `npm run dev` from). To point it at **another** project, set `AGENT_WORKSPACE` (relative paths
+for Read / Write / Bash resolve against it); the header shows the current working directory:
 
 ```bash
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 ```
 
-### B. 觀察模式(Route A)— 唯讀旁觀其他 coding agent
+### B. Observe mode (Route A) — read-only watching of another coding agent
 
-1. 點「來源」下拉 → **先選系統**:「觀察 Claude session」或「觀察 Antigravity 對話」。
-2. 該系統的 session 會列出來(依最後修改時間排序):
-   - Claude:顯示專案 slug + subagent 數(來源 `~/.claude/projects`)。
-   - Antigravity:顯示角色身分(orchestrator / explorer …)+ 步數(來源 `~/.gemini/antigravity/conversations`)。
-3. 選一個 → 立即重建成互動樹 + 對話;若那個 session **正在跑**,新追加的內容會即時流進畫面
-   (Claude 輪詢逐字稿新行;Antigravity 以 `steps.idx` 當游標輪詢新步驟)。
-4. 觀察模式是**唯讀**的:標題轉「觀察中(唯讀)」、輸入框停用、沒有核准框 / 暫停(逐字稿是歷史紀錄)。
-5. 要看**你自己當下這個 Claude session**,選 Claude 清單最上面、時間顯示「剛剛」的那筆即可。
-6. 選「＋ 新 Agent(操控)」回到操控模式(畫面清空、可重新下任務)。
+1. Open the "source" dropdown → **pick a system first**: "Observe a Claude session" or "Observe an
+   Antigravity conversation".
+2. That system's sessions are listed (sorted by last-modified):
+   - Claude: shows the project slug + subagent count (from `~/.claude/projects`).
+   - Antigravity: shows the role identity (orchestrator / explorer …) + step count (from
+     `~/.gemini/antigravity/conversations`).
+3. Pick one → it's rebuilt instantly into the interactive tree + conversation; if that session is
+   **still running**, newly appended content streams into the view live (Claude polls the transcript
+   for new lines; Antigravity polls new steps using `steps.idx` as a cursor).
+4. Observe mode is **read-only**: the header switches to "observing (read-only)", the input is
+   disabled, and there are no approval prompts or pause (a transcript is a historical record).
+5. To watch **your own current Claude session**, pick the top entry in the Claude list — the one whose
+   time shows "just now".
+6. Pick "＋ New Agent (control)" to return to control mode (the view clears, ready for a new task).
 
-> **Antigravity 的 reason**:每個工具步驟自帶 `toolAction`(為什麼)與 `toolSummary`(做什麼),
-> 分別進「💡 想法」與「🔧 動作」。Antigravity 常把思考與動作放同一步,所以工具不會漏。
-> 逐字稿是 protobuf,v1 用泛型萃取(不需 `.proto`),模型的長篇 thinking 暫不顯示(避免混入檔案內容)。
+> **Antigravity's reason**: each tool step carries both `toolAction` (the *why*) and `toolSummary`
+> (the *what*), which feed the "💡 Thought" and "🔧 Action" lines respectively. Antigravity usually
+> bundles the thought and the action into the same step, so no tools are lost. The transcript is
+> protobuf; v1 uses a generic extractor (no `.proto` needed), and the model's long-form thinking is
+> not shown for now (to avoid file contents bleeding in).
 
-> 切換來源時後端會 `store.reset()` 並重送一份完整 snapshot,前端整包覆蓋,不會殘留上一個 session 的節點。
+> On a source switch, the backend calls `store.reset()` and re-sends a full snapshot; the client
+> replaces everything, so no nodes leak from the previous session.
 
-### 讀左側「Agents」面板 — ReAct 步驟(想法 → 動作 → 結果)
+### Reading the left "Agents" panel — ReAct steps (Thought → Action → Result)
 
-左側每個 agent 是一個可展開的區塊;新的 subagent 會變成子區塊,上方有「指派任務」連結。區塊內每一步依 ReAct
-呈現,讓你看得出 agent **為什麼**這樣做:
+Each agent on the left is an expandable block; a new subagent becomes a child block with an "assigned
+task" link above it. Every step inside a block follows the ReAct paradigm so you can see **why** the
+agent did what it did:
 
-- 💡 **想法(理由)** — agent 動手前那句敘述(例:「先看專案結構,確認是不是空的」)。一句理由對**整批**工具顯示一次。
-- 🔧 **動作** — 工具與關鍵參數(Bash 指令 / 檔名 / skill 名 / MCP…),左側圓點是狀態(執行中 / 完成 / 錯誤)。
-- **結果摘要** — 工具輸出的第一行(過長會截斷);點「▸ 展開輸出」看完整結果。
+- 💡 **Thought (reason)** — the narration just before the agent acts (e.g. "let me look at the project
+  structure to check whether it's empty"). One reason is shown once per **batch** of tools.
+- 🔧 **Action** — the tool and its key arguments (Bash command / filename / skill name / MCP…); the dot
+  on the left is the status (running / done / error).
+- **Result summary** — the first line of the tool's output (truncated if long); click "▸ Expand
+  output" for the full result.
 
-> 理由來源是 agent 自己的敘述文字(操控、觀察兩種模式都有)。模型的「內心思考」(extended thinking)在逐字稿裡
-> 是被清空的,無法顯示。沒有前置敘述的工具就只顯示動作,屬正常。
+> The reason comes from the agent's own narration text (present in both control and observe modes). The
+> model's inner "extended thinking" is redacted (empty) in transcripts and can't be shown. A tool with
+> no preceding narration simply shows the action only — that's normal.
 
-右側「對話」欄則只留**真對話**:你的任務指令 + agent 給你的總結/回答(逐步理由已移到左側,不再洗版)。
+The right "Conversation" panel keeps only the **real dialogue**: your task instructions + the agent's
+summaries/answers to you (the step-by-step reasoning has moved to the left, so it no longer floods the
+chat).
 
-## 測試
+## Tests
 
 ```bash
-npm test            # 後端單元測試 (vitest, 66)
-cd web && npm test  # 前端單元測試 (vitest + jsdom, 33)
+npm test            # backend unit tests (vitest, 66)
+cd web && npm test  # frontend unit tests (vitest + jsdom, 33)
 ```
 
-型別檢查:`npx tsc --noEmit`(根與 `web/` 各自)。
+Type-check: `npx tsc --noEmit` (in the root and `web/` separately).
 
-## 端到端驗證
+## End-to-end check
 
 ```bash
-# 先讓後端在跑 (npm run dev),再於另一終端:
+# Start the backend first (npm run dev), then in another terminal:
 npx tsx spike/e2e.ts
 ```
 
-`spike/e2e.ts` 模擬前端跑完整閉環:連 WS → `/start` → 遇 `await:tool` 自動核准 → 觀察節點轉 `done`。
-`spike/probe.ts`(`npm run spike`)則是直接印出 SDKMessage 原始形狀,用來校正對 SDK 的假設。
+`spike/e2e.ts` simulates the frontend running the full loop: connect WS → `/start` → auto-approve on
+`await:tool` → watch nodes turn `done`. `spike/probe.ts` (`npm run spike`) instead prints raw
+SDKMessage shapes, used to calibrate assumptions about the SDK.
 
-## 專案結構
+## Project layout
 
 ```
-src/                    後端
-  server.ts             Express + WebSocketServer;/start /control /sessions /observe /new-agent;連上即送 snapshot
-  sourceController.ts   管理「來源 + 模式」:operate(Route B)↔ observe(Route A)切換、reset+重送 snapshot
-  sessionManager.ts     Route B 狀態核心:啟動、canUseTool 核准閘、暫停、派任務(輸入佇列)
-  agentAdapter.ts       包 Agent SDK query();橋接 abort、對接 canUseTool 的 toolUseID
-  translator.ts         純函式:SDK 串流 SDKMessage → 前端事件(樹節點 / 狀態 / 日誌 / 敘述)
-  translateTranscript.ts 純函式:Claude 逐字稿一筆記錄 → 前端事件(parentId 由外部傳入)
-  reactAssembler.ts     把 assistant 敘述配對成工具的 reason(想法→動作);沒配到的 flush 成對話總結
-  transcriptSource.ts   Claude Route A tailer:backfill + 輪詢新增行 + subagent 子檔連結;pickLatestSession
-  sessions.ts           列 ~/.claude/projects 的可觀察 session(listSessions);firstCwd 取工作目錄
-  sourceSystems.ts      依 system(claude/antigravity)分派觀察來源、工作目錄、session 列舉
-  antigravityProto.ts   Antigravity conversation .db 的 protobuf step 解碼(泛型萃取,不需 .proto)
-  translateAntigravity.ts 純函式:一筆已解碼 step → 前端事件(toolSummary→動作、toolAction→reason)
-  antigravitySource.ts  Antigravity Route A tailer:開 .db、以 steps.idx 當游標輪詢新步驟
-  antigravitySessions.ts 列 ~/.gemini/antigravity/conversations 的對話(身分 / 步數 / 工作目錄)
-  snapshot.ts           SnapshotStore:套用事件、維護 seq / nodes / logs / messages;reset()
-  types.ts              共用型別(FrontendEvent / TreeNode / ControlCommand …)
-web/src/                前端 (Vite + React)
-  store.ts              純函式 reducer applyPacket:snapshot 初始化 + seq 去重 + 事件套用 + mode
-  buildAgentBlocks.ts   扁平節點 → 每個 agent 一個區塊(可展開工具 / MCP、subagent 為子區塊)
-  useSession.ts         WebSocket 生命週期(1 秒重連)+ 控制/切換指令 + 樂觀更新
+src/                    backend
+  server.ts             Express + WebSocketServer; /start /control /sessions /observe /new-agent; sends snapshot on connect
+  sourceController.ts   manages "source + mode": control (Route B) ↔ observe (Route A) switching, reset + re-send snapshot
+  sessionManager.ts     Route B state core: start, canUseTool approval gate, pause, send-task (input queue)
+  agentAdapter.ts       wraps Agent SDK query(); bridges abort, wires canUseTool's toolUseID
+  translator.ts         pure fn: SDK stream SDKMessage → frontend events (tree node / status / log / narration)
+  translateTranscript.ts pure fn: one Claude transcript record → frontend events (parentId passed in)
+  reactAssembler.ts     pairs assistant narration into a tool's reason (thought→action); flushes unpaired ones as conversation summaries
+  transcriptSource.ts   Claude Route A tailer: backfill + poll new lines + subagent child-file linking; pickLatestSession
+  sessions.ts           lists observable sessions under ~/.claude/projects (listSessions); firstCwd for working dir
+  sourceSystems.ts      dispatches by system (claude/antigravity): observe source, working dir, session listing
+  antigravityProto.ts   protobuf step decoder for Antigravity conversation .db (generic extraction, no .proto)
+  translateAntigravity.ts pure fn: one decoded step → frontend events (toolSummary→action, toolAction→reason)
+  antigravitySource.ts  Antigravity Route A tailer: opens the .db, polls new steps using steps.idx as a cursor
+  antigravitySessions.ts lists conversations under ~/.gemini/antigravity/conversations (identity / step count / working dir)
+  snapshot.ts           SnapshotStore: applies events, maintains seq / nodes / logs / messages; reset()
+  types.ts              shared types (FrontendEvent / TreeNode / ControlCommand …)
+web/src/                frontend (Vite + React)
+  store.ts              pure reducer applyPacket: snapshot init + seq dedupe + event apply + mode
+  buildAgentBlocks.ts   flat nodes → one block per agent (expandable tools / MCP, subagents as child blocks)
+  useSession.ts         WebSocket lifecycle (1s reconnect) + control/switch commands + optimistic updates
   components/           AgentBlocks · Conversation · ApprovalModal · SourcePicker
-docs/superpowers/       設計 spec 與實作計畫
-NOTES.md                SDK / 逐字稿觀察筆記(spike 實測校正結果)
+docs/superpowers/       design specs and implementation plans
+NOTES.md                SDK / transcript notes (findings calibrated from spike experiments)
 ```
 
-## 已知限制
+## Known limitations
 
-- **觀察模式(Route A)是唯讀的**:逐字稿是歷史紀錄,沒有 pending 核准,所以觀察時不會有核准框,
-  也不能暫停 / 派任務。只有操控模式(Route B)能介入。
-- 後端 snapshot **不含 pending 核准**。操控模式下若「斷線時剛好有核准等待中」,重連後無法從 snapshot 還原核准框
-  (前端已把該節點標為 🟡 awaiting 作為部分補償)。完整修復需後端序列化 pending。
-- **操控模式的「暫停」是「中止目前執行」而非「續原對話」**:pause 會中斷進行中的工具(節點轉 error)並讓 agent 停手,
-  之後可用輸入框啟動**新**任務(pause 已重建 AbortController + 清輸入佇列)。但 abort 後 SDK 對話已丟,
-  無法延續同一對話——要延續請直接用「派新任務」而不要先 pause(見 `NOTES.md`)。
-- 一次觀察 / 操控**一個** session(切換時整個換掉);成本 / token 統計、任務看板為刻意排除的擴充點(YAGNI)。
+- **Observe mode (Route A) is read-only**: a transcript is a historical record with no pending
+  approvals, so there's no approval dialog and no pause / send-task while observing. Only control mode
+  (Route B) can intervene.
+- The backend snapshot **does not include pending approvals**. In control mode, if "an approval was
+  pending at the moment of disconnect", it can't be restored from the snapshot on reconnect (the
+  frontend marks that node 🟡 awaiting as partial compensation). A full fix needs the backend to
+  serialize pending approvals.
+- **Control mode's "pause" is "abort the current run", not "resume the same conversation"**: pause
+  interrupts the in-flight tool (its node turns error) and stops the agent; you can then start a **new**
+  task from the input (pause has rebuilt the AbortController + cleared the input queue). But after an
+  abort the SDK conversation is gone and can't be continued — to continue, use "send a new task"
+  instead of pausing first (see `NOTES.md`).
+- One session is observed / controlled at a time (fully swapped on switch); cost / token stats and a
+  task board are deliberately out of scope (YAGNI).
 ```
