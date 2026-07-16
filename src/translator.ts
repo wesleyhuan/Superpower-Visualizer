@@ -10,7 +10,7 @@ export function toolTypeOf(name: string): NodeType {
   return 'tool'
 }
 
-function labelFor(name: string, input: any): string {
+export function labelFor(name: string, input: any): string {
   if (name === 'Bash' && input?.command) return `Bash: ${input.command}`
   // spike 校正:Skill 工具的 input 欄位是 `skill`(如 'superpowers:brainstorming'),非 command。
   if (name === 'Skill' && (input?.skill || input?.command)) return `skill: ${input.skill ?? input.command}`
@@ -26,13 +26,15 @@ export function translate(msg: any): FrontendEvent[] {
     const blocks = msg.message?.content ?? []
     for (const b of blocks) {
       if (b?.type === 'text' && typeof b.text === 'string' && b.text.trim() !== '') {
-        out.push({ kind: 'message', role: 'assistant', text: b.text.trim() })
+        // 敘述交給 ReActAssembler:可能變成後面工具的 reason,或 flush 成對話訊息。
+        out.push({ kind: 'assistant-text', parentId, text: b.text.trim() })
       }
       if (b?.type === 'tool_use') {
         const type = toolTypeOf(b.name)
         const label = labelFor(b.name, b.input)
         out.push({ kind: 'tree:node', node: { id: b.id, parentId, type, label, status: 'running' } })
-        out.push({ kind: 'log', entry: { ts: Date.now(), nodeId: b.id, text: label, level: 'info' } })
+        // 不再為 tool_use 補 log(label 已在節點上);log 只留 tool_result 的實際輸出,
+        // 這樣「結果摘要 / 展開輸出」就是純結果,不會把工具名當成輸出。
       }
     }
   }

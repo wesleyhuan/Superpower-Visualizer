@@ -8,6 +8,7 @@ export interface TreeNode {
   type: NodeType
   label: string
   status: NodeStatus
+  reason?: string // ReAct:動手前那句敘述(掛在該批工具的第一個上,前端顯示一次)
 }
 
 export interface LogEntry {
@@ -29,6 +30,9 @@ export type FrontendEvent =
   | { kind: 'await:tool'; toolUseId: string; name: string; input: unknown }
   | { kind: 'session:error'; message: string }
   | { kind: 'message'; role: 'user' | 'assistant'; text: string }
+  // 中介事件:assistant 的敘述文字(帶 parentId)。由 ReActAssembler 消化成
+  // 工具的 reason,或(沒接工具時)flush 成 assistant 對話訊息;不會進 SnapshotStore。
+  | { kind: 'assistant-text'; parentId: string | null; text: string }
 
 export type ControlCommand =
   | { type: 'pause' }

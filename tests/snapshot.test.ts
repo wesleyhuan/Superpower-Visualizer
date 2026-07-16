@@ -32,4 +32,15 @@ describe('SnapshotStore', () => {
       { role: 'assistant', text: '好的' },
     ])
   })
+
+  it('reset 會清空節點/日誌/訊息並把 seq 歸零(切換 session 用)', () => {
+    const s = new SnapshotStore()
+    s.apply({ kind: 'tree:node', node: { id: 'a', parentId: null, type: 'tool', label: 'x', status: 'running' } })
+    s.apply({ kind: 'message', role: 'user', text: 'hi' })
+    s.reset()
+    const snap = s.snapshot()
+    expect(snap).toEqual({ seq: 0, nodes: [], logs: [], messages: [] })
+    // reset 後重新 apply,seq 又從 1 起
+    expect(s.apply({ kind: 'log', entry: { ts: 1, nodeId: null, text: 'y', level: 'info' } }).seq).toBe(1)
+  })
 })

@@ -9,6 +9,9 @@ export default defineConfig({
     proxy: {
       '/start': 'http://localhost:3001',
       '/control': 'http://localhost:3001',
+      '/observe': 'http://localhost:3001',
+      '/new-agent': 'http://localhost:3001',
+      '/sessions': 'http://localhost:3001',
     },
   },
   test: {

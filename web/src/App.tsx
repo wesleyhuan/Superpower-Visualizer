@@ -4,6 +4,7 @@ import { buildAgentBlocks } from './buildAgentBlocks'
 import { AgentBlocks } from './components/AgentBlocks'
 import { Conversation } from './components/Conversation'
 import { ApprovalModal } from './components/ApprovalModal'
+import { SourcePicker } from './components/SourcePicker'
 import type { LogEntry } from './wireTypes'
 
 type Theme = 'light' | 'dark'
@@ -32,9 +33,10 @@ const SunPath = 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5 19 19M3 12h2M19 12h2M5 19
 const MoonPath = 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z'
 
 export function App({ deps }: { deps?: SessionDeps } = {}) {
-  const { state, connected, pause, approve, followup, start } = useSession(deps)
+  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions } = useSession(deps)
   const [theme, toggleTheme] = useTheme()
   const [draft, setDraft] = useState('')
+  const isObserving = state.mode === 'observe'
 
   const { main } = useMemo(() => buildAgentBlocks(state), [state.nodes, state.order])
   const outputs = useMemo(() => outputsByNode(state.logs), [state.logs])
@@ -42,6 +44,7 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
   const hasStarted = state.order.length > 0 || state.messages.some((m) => m.role === 'user')
 
   const send = () => {
+    if (isObserving) return // 觀察模式唯讀
     const text = draft.trim()
     if (!text) return
     if (!hasStarted || state.sessionEnded) start(text)
@@ -64,6 +67,7 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
           <div><h1>Superpower Visualizer</h1><div className="sub">Agent 即時監控</div></div>
         </div>
         <div className="spacer" />
+        <SourcePicker mode={state.mode} onObserve={observe} onNewAgent={newAgent} loadSessions={loadSessions} />
         {state.pending.length > 0 && (
           <span className="badge-await"><span className="bdot" /> {state.pending.length} 待核准</span>
         )}
@@ -107,19 +111,26 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
             <Conversation messages={state.messages} />
           </div>
           <div className="composer">
-            <button className="stop" onClick={pause} disabled={state.sessionEnded} title="暫停 agent" aria-label="暫停 agent">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
-            </button>
+            {!isObserving && (
+              <button className="stop" onClick={pause} disabled={state.sessionEnded} title="暫停 agent" aria-label="暫停 agent">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+              </button>
+            )}
             <div className="field">
               <span className="prompt-caret">&gt;</span>
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={onKey}
-                placeholder={hasStarted && !state.sessionEnded ? '派新任務給 agent…' : '輸入初始任務啟動 agent…'}
+                disabled={isObserving}
+                placeholder={
+                  isObserving ? '觀察中(唯讀)—切到「新 Agent」才能操控'
+                    : hasStarted && !state.sessionEnded ? '派新任務給 agent…'
+                    : '輸入初始任務啟動 agent…'
+                }
               />
             </div>
-            <button className="btn btn-primary" onClick={send} disabled={draft.trim() === ''}>
+            <button className="btn btn-primary" onClick={send} disabled={isObserving || draft.trim() === ''}>
               送出
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
             </button>

@@ -2,6 +2,9 @@ import express from 'express'
 import { WebSocketServer, WebSocket } from 'ws'
 import { SnapshotStore } from './snapshot'
 import { SessionManager } from './sessionManager'
+import { SourceController } from './sourceController'
+import { ReActAssembler } from './reactAssembler'
+import { listSessions } from './sessions'
 import { translate } from './translator'
 import { realRunQuery, resolveWorkspace } from './agentAdapter'
 import type { ControlCommand } from './types'
@@ -13,17 +16,27 @@ export function wireEvents(
   mgr: { onMessage: (cb: (m: any) => void) => void; onAwaitTool: (cb: (a: any) => void) => void },
   store: SnapshotStore,
   broadcast: (p: Packet) => void,
+  assembler: ReActAssembler,
 ) {
+  const emit = (evs: ReturnType<ReActAssembler['process']>) => {
+    for (const ev of evs) {
+      const { seq, event } = store.apply(ev)
+      broadcast({ type: 'event', seq, event })
+    }
+  }
   mgr.onMessage((msg) => {
     if (msg?.type === 'session_error') {
+      emit(assembler.flushAll())
       const { seq, event } = store.apply({ kind: 'session:error', message: msg.error })
       broadcast({ type: 'event', seq, event })
       return
     }
-    for (const ev of translate(msg)) {
-      const { seq, event } = store.apply(ev)
-      broadcast({ type: 'event', seq, event })
+    // 回合結束:把最後還沒配到工具的敘述 flush 成對話總結。
+    if (msg?.type === 'result') {
+      emit(assembler.flushAll())
+      return
     }
+    emit(assembler.process(translate(msg)))
   })
   mgr.onAwaitTool((a) => {
     const { seq, event } = store.apply({ kind: 'await:tool', toolUseId: a.toolUseId, name: a.name, input: a.input })
@@ -38,21 +51,48 @@ export function createServer() {
   const mgr = new SessionManager({ runQuery: realRunQuery })
   const clients = new Set<WebSocket>()
 
-  const broadcast = (packet: Packet) => {
+  const broadcast = (packet: unknown) => {
     const data = JSON.stringify(packet)
     for (const ws of clients) if (ws.readyState === ws.OPEN) ws.send(data)
   }
-  wireEvents(mgr, store, broadcast)
+  // ReAct 組裝器:Route A/B 共用,把敘述配對成工具的 reason。切換來源時由 controller reset。
+  const assembler = new ReActAssembler()
+  // 進 observe 前叫停 control agent(pause 對「沒在跑」也安全:清空 pending、重建 controller)。
+  const controller = new SourceController(store, broadcast, resolveWorkspace, () => mgr.pause(), assembler)
+  wireEvents(mgr, store, broadcast, assembler)
 
   // 把使用者訊息也灌進事件管線,讓對話面板即時顯示、且能進 snapshot(斷線重連還原)。
+  // 走 assembler:人類訊息會先把 agent 上一輪還沒配到工具的敘述 flush 成總結,再放使用者訊息。
   const emitUserMessage = (text: string) => {
     const t = text.trim()
     if (!t) return
-    const { seq, event } = store.apply({ kind: 'message', role: 'user', text: t })
-    broadcast({ type: 'event', seq, event })
+    for (const ev of assembler.process([{ kind: 'message', role: 'user', text: t }])) {
+      const { seq, event } = store.apply(ev)
+      broadcast({ type: 'event', seq, event })
+    }
   }
 
+  // 列出可觀察的外部 session(給前端「來源」下拉用)。
+  app.get('/sessions', (_req, res) => {
+    res.json({ sessions: listSessions() })
+  })
+
+  // 切到 Route A(唯讀觀察某個外部 session)。
+  app.post('/observe', (req, res) => {
+    const file = String(req.body?.file ?? '')
+    if (!file) return res.status(400).json({ ok: false, error: 'missing file' })
+    controller.observe(file)
+    res.json({ ok: true })
+  })
+
+  // 回到 Route B control 空白狀態(準備開新 agent)。
+  app.post('/new-agent', (_req, res) => {
+    controller.toControl()
+    res.json({ ok: true })
+  })
+
   app.post('/start', (req, res) => {
+    if (controller.isObserving()) controller.toControl() // 從觀察切回操控,清空畫面
     const prompt = String(req.body?.prompt ?? '')
     emitUserMessage(prompt)
     mgr.start(prompt)
@@ -60,6 +100,8 @@ export function createServer() {
   })
 
   app.post('/control', (req, res) => {
+    // observe 模式唯讀:控制指令一律 no-op,避免前端誤操作。
+    if (controller.isObserving()) return res.json({ ok: true, readOnly: true })
     const cmd = req.body as ControlCommand
     console.log('[server] control', cmd)
     if (cmd.type === 'pause') mgr.pause()
@@ -72,7 +114,7 @@ export function createServer() {
   const wss = new WebSocketServer({ server })
   wss.on('connection', (ws) => {
     clients.add(ws)
-    ws.send(JSON.stringify({ type: 'snapshot', workspace: resolveWorkspace(), ...store.snapshot() }))
+    ws.send(JSON.stringify(controller.snapshot()))
     ws.on('close', () => clients.delete(ws))
   })
   return { app, server, wss }

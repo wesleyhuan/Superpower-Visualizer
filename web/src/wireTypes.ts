@@ -8,6 +8,7 @@ export interface TreeNode {
   type: NodeType
   label: string
   status: NodeStatus
+  reason?: string // ReAct:動手前那句敘述,顯示在該批工具上方一次
 }
 
 export interface LogEntry {
@@ -35,6 +36,17 @@ export type ControlCommand =
   | { type: 'approve'; toolUseId: string; allow: boolean }
   | { type: 'followup'; text: string }
 
-export type SnapshotPacket = { type: 'snapshot'; seq: number; nodes: TreeNode[]; logs: LogEntry[]; workspace: string; messages: ConversationEntry[] }
+export type Mode = 'control' | 'observe'
+
+// 可觀察的外部 Claude Code session(GET /sessions)
+export interface SessionInfo {
+  file: string
+  project: string
+  cwd: string
+  mtime: number
+  subagents: number
+}
+
+export type SnapshotPacket = { type: 'snapshot'; seq: number; nodes: TreeNode[]; logs: LogEntry[]; workspace: string; messages: ConversationEntry[]; mode?: Mode }
 export type EventPacket = { type: 'event'; seq: number; event: FrontendEvent }
 export type Packet = SnapshotPacket | EventPacket

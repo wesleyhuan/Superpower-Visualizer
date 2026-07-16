@@ -76,3 +76,71 @@
   (`process.env.AGENT_WORKSPACE?.trim() || process.cwd()`),不再隱式依賴啟動當下的 cwd,並可指向任一目標專案。
   - 驗證:`AGENT_WORKSPACE=<專案>/web npm run dev` 後,agent 的 `pwd` = `.../superpower_visualizer/web`(生效)。
   - 單元:`tests/agentAdapter.test.ts`(resolveWorkspace 三情境 + buildOptions 的 cwd/abortController/toolUseID)。
+
+## Route A 旁觀 tailer(2026-07-15,最小 PoC)
+
+> 目標:唯讀地把「其他/正在跑的」Claude Code CLI session 即時串進現有 UI(前端完全不動)。
+
+- **資料來源**:`~/.claude/projects/<slug>/<session>.jsonl`(主檔)+ `<session>/subagents/agent-<agentId>.jsonl`(子檔)。
+- **schema 差異(對比 SDK 串流)**:parentId 不在記錄裡;人類訊息是頂層 `message.content` **字串**;
+  subagent 連結靠主檔 Agent 的 `toolUseResult.agentId` → 對到子檔,子檔內工具掛在該 `Agent` tool_use 節點下。
+- **新增檔(下游全部沿用 `SnapshotStore` + WS + 前端)**:
+  - `src/translateTranscript.ts`:一筆記錄 → `FrontendEvent[]`,parentId 由呼叫端傳入。重用 translator 的 `toolTypeOf` / `labelFor`。
+  - `src/transcriptSource.ts`:`TranscriptSource`(backfill + 400ms 輪詢新增行,只吃完整的行;
+    發現 `agentId` 連結就把子檔加入追蹤、掛在對應節點下,同一 tick 內反覆掃到收斂)+ `pickLatestSession()`。
+  - `src/tailServer.ts`:觀察模式伺服器,port 3001,`/start` `/control` 唯讀 no-op(回 `readOnly:true`),
+    workspace 取逐字稿的 `cwd`。啟動:`TAIL_SESSION=<path.jsonl> npm run tail`(不給就挑最近修改的 session)。
+- **實測**:
+  - 富 session(AI-mantor `bdd3006d`)backfill:**2243 工具節點 · 134 subagent 全部連到子檔 · skill 18 · MCP 6 · 對話 1689**。
+  - 瀏覽器 E2E(HW-chess `770e9679`):現有 UI 直接顯示 **359 節點 · 22 subagent**、subagent 區塊可展開工作項目、
+    右側對話重建、標題列顯示該 session 的 workspace,唯一 console error 是 favicon 404(無害)。
+- **限制**:唯讀——逐字稿是歷史紀錄,沒有 pending 核准,故觀察模式不會有核准 modal;pause/followup 不作用。
+- **測試**:`tests/translateTranscript.test.ts`(6)、`tests/transcriptSource.test.ts`(backfill + subagent 連結 + 輪詢追加,3)。
+- **驗證腳本**:`spike/tail-probe.ts <session.jsonl>`(印出 backfill 產出的事件統計)。
+
+## 雙模式整合:Route A/B 可切換 + session 選單(2026-07-15)
+
+> 把 Route A(觀察)與 Route B(操控)併進**同一個** :3001 伺服器,前端用標題列「來源」下拉切換。
+> `tailServer.ts` 已移除(被 `/observe` 取代)。
+
+- **`SourceController`(`src/sourceController.ts`)** 管理「目前來源 + 模式」,兩種來源共用同一個 `store` + `broadcast`:
+  - `observe(file)`:`onEnterObserve()`(叫停 control agent)→ `source.stop()` → `store.reset()` → 建 `TranscriptSource`。
+    **backfill 期間靜默灌 store(不逐筆廣播),跑完只送一份 snapshot**,避免幾千筆 event 洗版;之後 live tail 才逐筆廣播。
+  - `toControl()`:停 source、reset、回 control、廣播空 snapshot。
+  - `snapshot()` 封包多帶 `mode: 'control' | 'observe'` 與 `workspace`。
+- **`SnapshotStore.reset()`**:清 nodes/logs/messages、`seq` 歸零。前端 `applyPacket` 的 snapshot 分支**無 seq 守門**,
+  所以 reset(seq→0)+ 新 snapshot 能乾淨 rebase 每個 client(舊 client 即使 seq=500 也會被整包覆蓋)。
+- **端點**:`GET /sessions`(列 `~/.claude/projects`,`src/sessions.ts`,只讀檔頭 64KB 取 cwd + 數子檔,不解析整份)、
+  `POST /observe {file}`、`POST /new-agent`(回 control 空白);`POST /control` 在 observe 模式一律 no-op(`readOnly:true`);
+  `POST /start` 若正在 observe 會先 `toControl()` 再啟動。
+- **前端**:`SourcePicker` 下拉(新 Agent + 各 session,附相對時間 / subagent 數);`state.mode` 帶進 store;
+  observe 模式輸入框停用、隱藏暫停鈕、送出停用、不跳核准 modal。vite proxy 補上 `/observe /new-agent /sessions`。
+- **實測**:瀏覽器切到 HW/chess → 標題轉「觀察中(唯讀)」、Agents 從 0 變 **359 節點 · 22 subagent**、
+  workspace 顯示 `C:\Users\wesle\Desktop\HW\chess`、暫停鈕消失;`/new-agent` → 回 control、nodes 歸 0、workspace 復原。
+- **踩雷**:`readWorkspace` / `firstCwd` 原本讀「第一行」就 break,但逐字稿第一筆常是沒有 cwd 的 summary → 抓不到 cwd。
+  改成掃檔頭多行(bounded 64KB),並把兩者統一到 `sessions.firstCwd`(`readWorkspace = firstCwd(file) || file`)。
+- **測試**:`tests/snapshot.test.ts`(+reset)、`tests/sessions.test.ts`(3)、`tests/sourceController.test.ts`(4)、
+  `web/tests/App.test.tsx`(+observe 唯讀、+下拉切換 observe/new-agent)。後端 39 / 前端 30 全綠、`tsc` 乾淨。
+
+## ReAct 顯示:每個工具補上「理由」(2026-07-16)
+
+> 需求:左側只看得到「動作」(工具),看不出 agent 用工具的理由(ReAct 的 Reason)。左側也太扁平。
+
+- **reason 從哪來**:逐字稿/串流裡 agent 動手前那句 `text` 敘述(「先看結構,因為…」)就是理由。原本被當對話訊息
+  丟到右欄、跟工具脫鉤。改成配對到工具。**extended thinking 不用**:掃 3 份逐字稿共 464 個 thinking block
+  內容全為空字串(只留 signature,存檔時被清掉),觀察模式拿不到。
+- **`ReActAssembler`(`src/reactAssembler.ts`,Route A/B 共用、有狀態)**:
+  - `translate` / `translateTranscript` 的 assistant text 改發中介事件 `assistant-text {parentId, text}`(不再直接發 message)。
+  - 每個 agent(parentId)一個待定敘述緩衝;敘述累積 → 遇工具 → 掛成該工具 `reason`(一句理由對整批:只掛該批**第一個**
+    工具,同批後續無 reason,前端把 reason 當群組標題顯示一次)→ 清空;遇人類訊息 / session 結束 / `flushAll` →
+    把還沒配到工具的敘述 flush 成 assistant 對話訊息(那是總結)。
+  - 接線:`wireEvents` 收 `result` → `flushAll`;`emitUserMessage` 走 assembler;`SourceController` backfill 後 `flushAll`,
+    切換來源時 `assembler.reset()`。`TreeNode` 加 `reason?`。
+  - 另外:tool_use 不再補「label log」,`log` 只留 tool_result 的實際輸出 → 結果摘要/展開輸出是純結果(不會拿工具名當輸出)。
+- **前端**:`AgentBlocks` 每個工具渲染成步驟:💡 reason(該批標題,會換行)→ 工具動作 → 結果摘要(輸出第一行,ellipsis)→
+  展開輸出;subagent 區塊上方顯示「派它的理由」。實測某 session:359 工具中 67% 有 reason。
+- **踩雷(版面全空白)**:過長的 reason 文字 + `nowrap` 的結果摘要,在缺 `min-width:0` 的 flex/grid 鏈上會把
+  `.agent-block` 撐到 ~4800px,被其 `overflow:hidden` 裁掉 → 左欄整片空白。修法:`.agent-block` 改 flex column,
+  並在整條鏈(`.ab-body / .work / .wstep / .witem-row / .wreason …`)補 `min-width:0`,reason 用 `overflow-wrap:anywhere`。
+- **測試**:`tests/reactAssembler.test.ts`(8)、`web/tests/AgentBlocks.test.tsx`(+reason/結果摘要、+subagent reason);
+  translator/transcript/server 測試同步改為 `assistant-text`。後端 48 / 前端 32 全綠、`tsc` 乾淨。

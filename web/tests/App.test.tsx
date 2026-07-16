@@ -75,6 +75,35 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     expect(bodyOf('/control')).toEqual({ type: 'pause' })
   })
 
+  it('observe 模式:輸入框唯讀、隱藏暫停鈕、送出停用', () => {
+    renderApp()
+    push(snapshot({ mode: 'observe', workspace: 'C:/other/proj', messages: [{ role: 'user', text: '外部任務' }] }))
+    expect(screen.getByPlaceholderText(/觀察中/)).toBeDisabled()
+    expect(screen.queryByRole('button', { name: '暫停 agent' })).toBeNull()
+    expect(screen.getByRole('button', { name: /送出/ })).toBeDisabled()
+  })
+
+  it('來源下拉:載入 sessions、點某個 → POST /observe;點新 Agent → POST /new-agent', async () => {
+    // 讓 /sessions 回一筆,其餘 POST 回 ok
+    fetchImpl = vi.fn((path: string) => {
+      if (path === '/sessions') return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
+        { file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-HW-chess', cwd: 'C:/proj', mtime: Date.now(), subagents: 3 },
+      ] }) })
+      return Promise.resolve({ ok: true })
+    }) as unknown as typeof fetchImpl
+    renderApp()
+    push(snapshot())
+
+    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    const item = await screen.findByText('HW/chess')
+    fireEvent.click(item)
+    expect(bodyOf('/observe')).toEqual({ file: 'C:/proj/s.jsonl' })
+
+    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    fireEvent.click(await screen.findByText(/新 Agent/))
+    expect(bodyOf('/new-agent')).toEqual({})
+  })
+
   it('事件流會渲染對話與 agent 區塊', async () => {
     renderApp()
     push(snapshot())

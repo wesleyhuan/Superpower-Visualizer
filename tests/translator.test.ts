@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { translate } from '../src/translator'
 
 describe('translate: assistant tool_use', () => {
-  it('把一個 Bash tool_use 轉成 tree:node(tool)+ log', () => {
+  it('把一個 Bash tool_use 轉成 tree:node(tool);tool_use 不再補 log', () => {
     const msg = {
       type: 'assistant',
       parent_tool_use_id: null,
@@ -17,26 +17,27 @@ describe('translate: assistant tool_use', () => {
       kind: 'tree:node',
       node: { id: 'toolu_1', parentId: null, type: 'tool', label: 'Bash: npm test', status: 'running' },
     })
-    expect(events.some((e) => e.kind === 'log')).toBe(true)
+    // log 只留給 tool_result(實際輸出),tool_use 不再產生 log
+    expect(events.some((e) => e.kind === 'log')).toBe(false)
   })
 })
 
-describe('translate: assistant text → message', () => {
-  it('assistant 的 text block 轉成 message 事件(role assistant)', () => {
+describe('translate: assistant text → assistant-text(交給 ReActAssembler)', () => {
+  it('assistant 的 text block 轉成 assistant-text 事件(帶 parentId)', () => {
     const msg = {
       type: 'assistant',
       parent_tool_use_id: null,
       message: { content: [{ type: 'text', text: '我先研究專案結構。' }] },
     }
-    expect(translate(msg)).toContainEqual({ kind: 'message', role: 'assistant', text: '我先研究專案結構。' })
+    expect(translate(msg)).toContainEqual({ kind: 'assistant-text', parentId: null, text: '我先研究專案結構。' })
   })
 
-  it('空白 text 不產生 message', () => {
+  it('空白 text 不產生事件', () => {
     const msg = {
       type: 'assistant', parent_tool_use_id: null,
       message: { content: [{ type: 'text', text: '   ' }] },
     }
-    expect(translate(msg).some((e) => e.kind === 'message')).toBe(false)
+    expect(translate(msg).some((e) => e.kind === 'assistant-text')).toBe(false)
   })
 })
 

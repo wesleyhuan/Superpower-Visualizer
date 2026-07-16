@@ -31,6 +31,14 @@ export class SnapshotStore {
     return { seq: this.seq, event }
   }
 
+  // 切換 session / 模式時整個歸零,讓下一份 snapshot 從乾淨狀態開始。
+  reset(): void {
+    this.seq = 0
+    this.nodes.clear()
+    this.logs = []
+    this.messages = []
+  }
+
   snapshot(): { seq: number; nodes: TreeNode[]; logs: LogEntry[]; messages: ConversationEntry[] } {
     return { seq: this.seq, nodes: [...this.nodes.values()], logs: [...this.logs], messages: [...this.messages] }
   }

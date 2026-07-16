@@ -1,4 +1,4 @@
-import type { Packet, TreeNode, LogEntry, ConversationEntry } from './wireTypes'
+import type { Packet, TreeNode, LogEntry, ConversationEntry, Mode } from './wireTypes'
 
 export interface PendingApproval { toolUseId: string; name: string; input: unknown }
 
@@ -12,10 +12,11 @@ export interface SessionState {
   sessionEnded: boolean
   errorMessage: string | null
   workspace: string
+  mode: Mode
 }
 
 export function initialState(): SessionState {
-  return { seq: 0, nodes: {}, order: [], logs: [], messages: [], pending: [], sessionEnded: false, errorMessage: null, workspace: '' }
+  return { seq: 0, nodes: {}, order: [], logs: [], messages: [], pending: [], sessionEnded: false, errorMessage: null, workspace: '', mode: 'control' }
 }
 
 export function applyPacket(state: SessionState, packet: Packet): SessionState {
@@ -23,7 +24,7 @@ export function applyPacket(state: SessionState, packet: Packet): SessionState {
     const nodes: Record<string, TreeNode> = {}
     const order: string[] = []
     for (const n of packet.nodes) { nodes[n.id] = n; order.push(n.id) }
-    return { seq: packet.seq, nodes, order, logs: [...packet.logs], messages: [...(packet.messages ?? [])], pending: [], sessionEnded: false, errorMessage: null, workspace: packet.workspace ?? '' }
+    return { seq: packet.seq, nodes, order, logs: [...packet.logs], messages: [...(packet.messages ?? [])], pending: [], sessionEnded: false, errorMessage: null, workspace: packet.workspace ?? '', mode: packet.mode ?? 'control' }
   }
   // event
   if (packet.seq <= state.seq) {
