@@ -8,8 +8,11 @@
 **兩種模式(同一個伺服器、同一套 UI,標題列「來源」下拉切換):**
 
 - **操控(Route B)** — UI 自己用 Agent SDK 啟動 agent,可核准 / 暫停 / 派任務。
-- **觀察(Route A,唯讀)** — 旁觀**其他正在跑的 Claude Code CLI session**:tailer 讀它的逐字稿
-  (`~/.claude/projects/<slug>/<session>.jsonl` + `subagents/`),即時重建成同一套互動樹 + 對話。
+- **觀察(Route A,唯讀)** — 旁觀**其他 coding agent 的 session**,即時重建成同一套互動樹 + 對話。
+  支援兩種系統(來源下拉先選系統):
+  - **Claude Code** — 讀 `~/.claude/projects/<slug>/<session>.jsonl`(主檔 + `subagents/`)。
+  - **Antigravity**(Google)— 讀 `~/.gemini/antigravity/conversations/<id>.db`(SQLite,steps 為 protobuf);
+    每個工具自帶 `toolAction`,直接當 ReAct 的「想法」。v1 為扁平(一個對話 = 一個 agent 區塊)。
   因為是歷史紀錄,觀察模式不會有核准框,也不能暫停 / 派任務(輸入框顯示「觀察中(唯讀)」)。
 
 ```
@@ -87,15 +90,21 @@ powershell -Command "Stop-Process -Id <PID> -Force"
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 ```
 
-### B. 觀察模式(Route A)— 唯讀旁觀其他 Claude Code session
+### B. 觀察模式(Route A)— 唯讀旁觀其他 coding agent
 
-1. 點「來源」下拉 →「**觀察其他 session(唯讀)**」,會列出 `~/.claude/projects` 下所有 session
-   (依最後修改時間排序,附 subagent 數)。
-2. 選一個 → 立即把它的逐字稿(主檔 + `subagents/`)重建成互動樹 + 對話;若那個 session **正在跑**,
-   新追加的內容會即時流進畫面。
-3. 觀察模式是**唯讀**的:標題轉「觀察中(唯讀)」、輸入框停用、沒有核准框 / 暫停(逐字稿是歷史紀錄)。
-4. 要看**你自己當下這個 session**,選最上面、時間顯示「剛剛」的那筆即可。
-5. 選「＋ 新 Agent(操控)」回到操控模式(畫面清空、可重新下任務)。
+1. 點「來源」下拉 → **先選系統**:「觀察 Claude session」或「觀察 Antigravity 對話」。
+2. 該系統的 session 會列出來(依最後修改時間排序):
+   - Claude:顯示專案 slug + subagent 數(來源 `~/.claude/projects`)。
+   - Antigravity:顯示角色身分(orchestrator / explorer …)+ 步數(來源 `~/.gemini/antigravity/conversations`)。
+3. 選一個 → 立即重建成互動樹 + 對話;若那個 session **正在跑**,新追加的內容會即時流進畫面
+   (Claude 輪詢逐字稿新行;Antigravity 以 `steps.idx` 當游標輪詢新步驟)。
+4. 觀察模式是**唯讀**的:標題轉「觀察中(唯讀)」、輸入框停用、沒有核准框 / 暫停(逐字稿是歷史紀錄)。
+5. 要看**你自己當下這個 Claude session**,選 Claude 清單最上面、時間顯示「剛剛」的那筆即可。
+6. 選「＋ 新 Agent(操控)」回到操控模式(畫面清空、可重新下任務)。
+
+> **Antigravity 的 reason**:每個工具步驟自帶 `toolAction`(為什麼)與 `toolSummary`(做什麼),
+> 分別進「💡 想法」與「🔧 動作」。Antigravity 常把思考與動作放同一步,所以工具不會漏。
+> 逐字稿是 protobuf,v1 用泛型萃取(不需 `.proto`),模型的長篇 thinking 暫不顯示(避免混入檔案內容)。
 
 > 切換來源時後端會 `store.reset()` 並重送一份完整 snapshot,前端整包覆蓋,不會殘留上一個 session 的節點。
 
@@ -116,8 +125,8 @@ AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 ## 測試
 
 ```bash
-npm test            # 後端單元測試 (vitest, 39)
-cd web && npm test  # 前端單元測試 (vitest + jsdom, 30)
+npm test            # 後端單元測試 (vitest, 66)
+cd web && npm test  # 前端單元測試 (vitest + jsdom, 33)
 ```
 
 型別檢查:`npx tsc --noEmit`(根與 `web/` 各自)。
@@ -141,10 +150,15 @@ src/                    後端
   sessionManager.ts     Route B 狀態核心:啟動、canUseTool 核准閘、暫停、派任務(輸入佇列)
   agentAdapter.ts       包 Agent SDK query();橋接 abort、對接 canUseTool 的 toolUseID
   translator.ts         純函式:SDK 串流 SDKMessage → 前端事件(樹節點 / 狀態 / 日誌 / 敘述)
-  translateTranscript.ts 純函式:Route A 逐字稿一筆記錄 → 前端事件(parentId 由外部傳入)
+  translateTranscript.ts 純函式:Claude 逐字稿一筆記錄 → 前端事件(parentId 由外部傳入)
   reactAssembler.ts     把 assistant 敘述配對成工具的 reason(想法→動作);沒配到的 flush 成對話總結
-  transcriptSource.ts   Route A tailer:backfill + 輪詢新增行 + subagent 子檔連結;pickLatestSession
+  transcriptSource.ts   Claude Route A tailer:backfill + 輪詢新增行 + subagent 子檔連結;pickLatestSession
   sessions.ts           列 ~/.claude/projects 的可觀察 session(listSessions);firstCwd 取工作目錄
+  sourceSystems.ts      依 system(claude/antigravity)分派觀察來源、工作目錄、session 列舉
+  antigravityProto.ts   Antigravity conversation .db 的 protobuf step 解碼(泛型萃取,不需 .proto)
+  translateAntigravity.ts 純函式:一筆已解碼 step → 前端事件(toolSummary→動作、toolAction→reason)
+  antigravitySource.ts  Antigravity Route A tailer:開 .db、以 steps.idx 當游標輪詢新步驟
+  antigravitySessions.ts 列 ~/.gemini/antigravity/conversations 的對話(身分 / 步數 / 工作目錄)
   snapshot.ts           SnapshotStore:套用事件、維護 seq / nodes / logs / messages;reset()
   types.ts              共用型別(FrontendEvent / TreeNode / ControlCommand …)
 web/src/                前端 (Vite + React)

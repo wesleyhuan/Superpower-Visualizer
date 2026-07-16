@@ -144,3 +144,22 @@
   並在整條鏈(`.ab-body / .work / .wstep / .witem-row / .wreason …`)補 `min-width:0`,reason 用 `overflow-wrap:anywhere`。
 - **測試**:`tests/reactAssembler.test.ts`(8)、`web/tests/AgentBlocks.test.tsx`(+reason/結果摘要、+subagent reason);
   translator/transcript/server 測試同步改為 `assistant-text`。後端 48 / 前端 32 全綠、`tsc` 乾淨。
+
+## Antigravity 觀察模式(2026-07-16)
+
+把 Google Antigravity 的 agent 逐字稿接進觀察模式(唯讀)。**右側 SnapshotStore / ReActAssembler / 前端資料流不動**,
+只加最左邊的來源轉譯層,並在 `SourceController` / `/observe` / `/sessions` 加 `system` 維度(`sourceSystems.ts` 分派)。
+
+- **逐字稿位置**:`~/.gemini/antigravity/conversations/<id>.db`,每個對話一個 **SQLite**(不在 `.antigravity-ide`、也不在 VS Code 的 `state.vscdb`)。
+  表 `steps(idx, step_type, status, has_subtrajectory, step_payload BLOB, ...)` + `trajectory_metadata_blob`(角色身分)。
+- **step_payload 是 protobuf**:工具參數以 JSON 字串、散文以明文內嵌。用泛型 wire-format 走訪撈文字(`antigravityProto.ts`),**不需 `.proto`**。
+  文字葉節點判別:**內容不含硬控制位元組**(protobuf 的 tag/len 才有)比「印字比例」準,小訊息也不誤判。
+- **每個工具自帶 `toolAction`(為什麼)+ `toolSummary`(做什麼)**:分別進 💡 想法 / 🔧 動作,互補、無雜訊、高涵蓋。
+- **踩雷①(漏掉一半工具)**:Antigravity 常把「思考 + 動作」放**同一步**(`step_type` 常是 15,61 步裡 60 步帶工具)。
+  若用 `step_type===15` 短路會漏掉帶思考的工具(某 session 94→186 節點)。修法:**工具內容優先判斷**,不靠 step_type。
+- **踩雷②(reason 洗版)**:一度用「最長散文」當 reason,結果 `write_to_file` 把整份**檔案內容**當理由。
+  改用 `toolAction` 當 reason(乾淨、100% 可靠);模型長篇 thinking 與檔案內容混在同層,乾淨拆出需 `.proto`,v1 不顯示。
+- **subagent**:是**各自獨立的 .db**(每個帶角色身分,cascade_id==檔名,`has_subtrajectory=0`)。v1 扁平:`invoke_subagent` 顯示成節點,不跨 db 連樹。
+- **實測**(3 對話):節點 186 / 120 / 35,subagent 4 / 0 / 2,reason 涵蓋 84% / 100% / 14%(14% 是該 session 的 toolAction 多與 toolSummary 相同,刻意不重複顯示)。
+- **測試**:`antigravityProto`(手工組 protobuf fixture)、`translateAntigravity`、`antigravitySessions` / `antigravitySource`(node:sqlite 合成 .db)、`sourceSystems`。後端 66 / 前端 33 全綠、`tsc` 乾淨。
+- **YAGNI**:跨 db subagent 連樹、type-15 長篇 thinking 顯示、Antigravity 操控(無 SDK 途徑)、Codex(此機未裝)。
