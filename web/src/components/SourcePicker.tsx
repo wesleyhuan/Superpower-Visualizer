@@ -10,7 +10,7 @@ function relTime(ms: number): string {
   return `${Math.floor(h / 24)} 天前`
 }
 
-// slug 形如 C--Users-wesle-Desktop-HW-chess → HW/chess
+// slug 形如 C--Users-<user>-Desktop-proj-chess → proj/chess
 function shortProject(p: string): string {
   return p.replace(/^C--Users-[^-]+-Desktop-/, '').replace(/^C--Users-[^-]+-/, '').replace(/-/g, '/')
 }

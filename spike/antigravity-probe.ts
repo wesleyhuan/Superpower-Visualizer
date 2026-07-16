@@ -5,16 +5,25 @@
 // steps.step_payload / render_info 是 protobuf(二進位),但工具參數以 JSON 內嵌、
 // assistant 思考以明文內嵌。這裡用「泛型 protobuf 字串萃取」把文字撈出來,不需 .proto。
 //
-// 跑法:npx tsx spike/antigravity-probe.ts [db路徑]
+// 跑法:npx tsx spike/antigravity-probe.ts [db路徑](省略則自動挑最近修改的對話)
 import { DatabaseSync } from 'node:sqlite'
+import { readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ReActAssembler } from '../src/reactAssembler'
 import type { FrontendEvent, NodeStatus } from '../src/types'
 
-const dbPath = process.argv[2] ??
-  join(homedir(), '.gemini', 'antigravity', 'conversations',
-    '10c231b9-fb7b-4adf-91bf-8b793e490164.db')
+// 沒指定路徑時,挑 conversations 目錄裡最近修改的 .db(避免寫死某個真實對話 UUID)。
+function latestConversation(): string {
+  const dir = join(homedir(), '.gemini', 'antigravity', 'conversations')
+  const dbs = readdirSync(dir).filter((f) => f.endsWith('.db'))
+    .map((f) => ({ f: join(dir, f), m: statSync(join(dir, f)).mtimeMs }))
+    .sort((a, b) => b.m - a.m)
+  if (!dbs.length) throw new Error(`找不到任何對話 .db:${dir}`)
+  return dbs[0].f
+}
+
+const dbPath = process.argv[2] ?? latestConversation()
 
 // ── 泛型 protobuf 走訪:遞迴 length-delimited 欄位,把「像文字的葉節點」收集起來 ──
 function readVarint(buf: Buffer, pos: number): [number, number] {

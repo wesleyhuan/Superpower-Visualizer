@@ -91,8 +91,8 @@
   - `src/tailServer.ts`:觀察模式伺服器,port 3001,`/start` `/control` 唯讀 no-op(回 `readOnly:true`),
     workspace 取逐字稿的 `cwd`。啟動:`TAIL_SESSION=<path.jsonl> npm run tail`(不給就挑最近修改的 session)。
 - **實測**:
-  - 富 session(AI-mantor `bdd3006d`)backfill:**2243 工具節點 · 134 subagent 全部連到子檔 · skill 18 · MCP 6 · 對話 1689**。
-  - 瀏覽器 E2E(HW-chess `770e9679`):現有 UI 直接顯示 **359 節點 · 22 subagent**、subagent 區塊可展開工作項目、
+  - 富 session(某大型專案)backfill:**2243 工具節點 · 134 subagent 全部連到子檔 · skill 18 · MCP 6 · 對話 1689**。
+  - 瀏覽器 E2E(某專案 session):現有 UI 直接顯示 **359 節點 · 22 subagent**、subagent 區塊可展開工作項目、
     右側對話重建、標題列顯示該 session 的 workspace,唯一 console error 是 favicon 404(無害)。
 - **限制**:唯讀——逐字稿是歷史紀錄,沒有 pending 核准,故觀察模式不會有核准 modal;pause/followup 不作用。
 - **測試**:`tests/translateTranscript.test.ts`(6)、`tests/transcriptSource.test.ts`(backfill + subagent 連結 + 輪詢追加,3)。
@@ -115,8 +115,8 @@
   `POST /start` 若正在 observe 會先 `toControl()` 再啟動。
 - **前端**:`SourcePicker` 下拉(新 Agent + 各 session,附相對時間 / subagent 數);`state.mode` 帶進 store;
   observe 模式輸入框停用、隱藏暫停鈕、送出停用、不跳核准 modal。vite proxy 補上 `/observe /new-agent /sessions`。
-- **實測**:瀏覽器切到 HW/chess → 標題轉「觀察中(唯讀)」、Agents 從 0 變 **359 節點 · 22 subagent**、
-  workspace 顯示 `C:\Users\wesle\Desktop\HW\chess`、暫停鈕消失;`/new-agent` → 回 control、nodes 歸 0、workspace 復原。
+- **實測**:瀏覽器切到某專案 session → 標題轉「觀察中(唯讀)」、Agents 從 0 變 **359 節點 · 22 subagent**、
+  workspace 顯示 `C:\Users\<you>\Desktop\proj\chess`、暫停鈕消失;`/new-agent` → 回 control、nodes 歸 0、workspace 復原。
 - **踩雷**:`readWorkspace` / `firstCwd` 原本讀「第一行」就 break,但逐字稿第一筆常是沒有 cwd 的 summary → 抓不到 cwd。
   改成掃檔頭多行(bounded 64KB),並把兩者統一到 `sessions.firstCwd`(`readWorkspace = firstCwd(file) || file`)。
 - **測試**:`tests/snapshot.test.ts`(+reset)、`tests/sessions.test.ts`(3)、`tests/sourceController.test.ts`(4)、

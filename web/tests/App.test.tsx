@@ -86,7 +86,7 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
   it('來源下拉:先選 Claude → 載入 sessions → 點某個 → POST /observe;點新 Agent → POST /new-agent', async () => {
     fetchImpl = vi.fn((path: string) => {
       if (path.startsWith('/sessions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
-        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-HW-chess', cwd: 'C:/proj', mtime: Date.now(), subagents: 3 },
+        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/proj', mtime: Date.now(), subagents: 3 },
       ] }) })
       return Promise.resolve({ ok: true })
     }) as unknown as typeof fetchImpl
@@ -95,7 +95,7 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
     fireEvent.click(screen.getByText(/觀察 Claude session/))
-    const item = await screen.findByText('HW/chess')
+    const item = await screen.findByText('proj/chess')
     fireEvent.click(item)
     expect(bodyOf('/observe')).toEqual({ system: 'claude', file: 'C:/proj/s.jsonl' })
 
