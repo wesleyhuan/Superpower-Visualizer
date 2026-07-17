@@ -51,3 +51,34 @@ export function buildAgentBlocks(state: State): { main: AgentBlock } {
   }
   return { main }
 }
+
+// 攤平成有序的 agent 清單(main 在前、深度優先展開 subagent),供左側清單 + 彈窗導覽。
+export interface AgentEntry {
+  key: string            // 唯一鍵:主 agent='main',subagent=其 node.id
+  title: string          // 主=mainTitle,sub=node.label
+  kind: 'main' | 'sub'
+  status: NodeStatus
+  steps: number          // items + 直屬 children 數
+  reason?: string        // subagent「被指派的理由」(main 無)
+  items: TreeNode[]      // 該 agent 的工作項目
+  subKeys: string[]      // 直屬 subagent 的 key(彈窗頂部 chip + 切換)
+}
+
+export function flattenAgents(main: AgentBlock, mainTitle: string): AgentEntry[] {
+  const out: AgentEntry[] = []
+  const visit = (block: AgentBlock, title: string, kind: 'main' | 'sub'): void => {
+    out.push({
+      key: block.id ?? 'main',
+      title,
+      kind,
+      status: block.status,
+      steps: block.items.length + block.children.length,
+      reason: block.node?.reason,
+      items: block.items,
+      subKeys: block.children.map((c) => c.id as string),
+    })
+    for (const c of block.children) visit(c, c.node?.label ?? '(subagent)', 'sub')
+  }
+  visit(main, mainTitle, 'main')
+  return out
+}
