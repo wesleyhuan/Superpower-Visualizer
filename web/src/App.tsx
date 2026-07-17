@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSession, type SessionDeps } from './useSession'
-import { buildAgentBlocks } from './buildAgentBlocks'
-import { AgentBlocks } from './components/AgentBlocks'
+import { buildAgentBlocks, flattenAgents } from './buildAgentBlocks'
+import { AgentList } from './components/AgentList'
+import { AgentModal } from './components/AgentModal'
 import { Conversation } from './components/Conversation'
 import { ApprovalModal } from './components/ApprovalModal'
 import { SourcePicker } from './components/SourcePicker'
@@ -41,6 +42,8 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
   const { main } = useMemo(() => buildAgentBlocks(state), [state.nodes, state.order])
   const outputs = useMemo(() => outputsByNode(state.logs), [state.logs])
   const mainTitle = state.messages.find((m) => m.role === 'user')?.text ?? '主 Agent'
+  const entries = useMemo(() => flattenAgents(main, mainTitle), [main, mainTitle])
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
   const hasStarted = state.order.length > 0 || state.messages.some((m) => m.role === 'user')
 
   const send = () => {
@@ -93,7 +96,7 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
           <div className="panel-body">
             {nodeCount === 0
               ? <div className="empty">尚無活動 — 啟動 agent 後,它的工作與 subagent 會顯示在這裡。</div>
-              : <AgentBlocks main={main} mainTitle={mainTitle} outputByNode={outputs} />}
+              : <AgentList entries={entries} onOpen={setOpenIndex} />}
           </div>
         </section>
 
@@ -138,6 +141,15 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
         </section>
       </main>
 
+      {openIndex !== null && openIndex < entries.length && (
+        <AgentModal
+          entries={entries}
+          index={openIndex}
+          outputByNode={outputs}
+          onIndex={setOpenIndex}
+          onClose={() => setOpenIndex(null)}
+        />
+      )}
       <ApprovalModal pending={state.pending} onDecide={approve} />
     </div>
   )

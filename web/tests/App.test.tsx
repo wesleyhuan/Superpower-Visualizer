@@ -124,16 +124,20 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     expect(bodyOf('/observe')).toEqual({ system: 'antigravity', file: 'C:/ag/conv1.db' })
   })
 
-  it('事件流會渲染對話與 agent 區塊', async () => {
+  it('事件流:對話即時顯示,agent 清單點開後彈窗顯示工作項目', async () => {
     renderApp()
     push(snapshot())
     push({ type: 'event', seq: 1, event: { kind: 'message', role: 'user', text: '幫我做計算機' } })
     push({ type: 'event', seq: 2, event: { kind: 'message', role: 'assistant', text: '好的,我開始。' } })
     push({ type: 'event', seq: 3, event: { kind: 'tree:node', node: { id: 'b', parentId: null, type: 'tool', label: 'Bash: ls', status: 'done' } } })
 
-    // 使用者訊息同時出現在對話 bubble 與主 agent 區塊標題,故至少一個
+    // 使用者訊息同時出現在對話 bubble 與左側 agent 清單列標題
     expect((await screen.findAllByText('幫我做計算機')).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('好的,我開始。')).toBeInTheDocument()   // agent 文字回覆(對話)
-    expect(screen.getByText('Bash: ls')).toBeInTheDocument()        // agent 區塊工作項目
+
+    // 工作項目在彈窗裡:點 agent 列開窗後才出現
+    expect(screen.queryByText('Bash: ls')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /幫我做計算機/ }))
+    expect(screen.getByText('Bash: ls')).toBeInTheDocument()
   })
 })
