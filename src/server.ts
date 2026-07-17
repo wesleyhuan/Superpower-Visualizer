@@ -48,6 +48,23 @@ export function wireEvents(
 export function createServer() {
   const app = express()
   app.use(express.json())
+
+  // Sentinel: Reject requests from unauthorized origins (CORS/CSRF protection)
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      try {
+        const url = new URL(origin);
+        if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+          return res.status(403).json({ ok: false, error: 'Origin not allowed' });
+        }
+      } catch (e) {
+        return res.status(403).json({ ok: false, error: 'Invalid origin' });
+      }
+    }
+    next();
+  });
+
   const store = new SnapshotStore()
   const mgr = new SessionManager({ runQuery: realRunQuery })
   const clients = new Set<WebSocket>()
@@ -116,7 +133,24 @@ export function createServer() {
   })
 
   const server = app.listen(3001, () => console.log('[server] http on :3001'))
-  const wss = new WebSocketServer({ server })
+
+  // Sentinel: Reject connections from unauthorized origins (CSWSH protection)
+  const verifyClient = (info: any, cb: (res: boolean, code?: number, message?: string) => void) => {
+    const origin = info.req.headers.origin;
+    if (origin) {
+      try {
+        const url = new URL(origin);
+        if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+          return cb(false, 403, 'Forbidden');
+        }
+      } catch (e) {
+        return cb(false, 403, 'Forbidden');
+      }
+    }
+    cb(true);
+  };
+
+  const wss = new WebSocketServer({ server, verifyClient })
   wss.on('connection', (ws) => {
     clients.add(ws)
     ws.send(JSON.stringify(controller.snapshot()))
