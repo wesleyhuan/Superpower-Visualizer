@@ -110,10 +110,13 @@ AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 
 > 切換來源時後端會 `store.reset()` 並重送一份完整 snapshot,前端整包覆蓋,不會殘留上一個 session 的節點。
 
-### 讀左側「Agents」面板 — ReAct 步驟(想法 → 動作 → 結果)
+### 讀左側「Agents」面板 — 清單 + 彈出式視窗
 
-左側每個 agent 是一個可展開的區塊;新的 subagent 會變成子區塊,上方有「指派任務」連結。區塊內每一步依 ReAct
-呈現,讓你看得出 agent **為什麼**這樣做:
+左側是一份 **agent 清單**(主 agent + 各 subagent),每列顯示名稱 / 狀態 / 步數 / subagent 數。
+**點任一列 → 置中彈窗**攤開那個 agent 的完整任務;彈窗頂部用 chip 列出它指派的 subagent(點 chip 同窗切換),
+頭部有「上一個 / 下一個」與「`目前 / 總數`」位置,按 `←` `→` 或方向鍵切換,`Esc` / 點灰底 / ✕ 關閉。
+
+彈窗內每一步依 ReAct 呈現,讓你看得出 agent **為什麼**這樣做:
 
 - 💡 **想法(理由)** — agent 動手前那句敘述(例:「先看專案結構,確認是不是空的」)。一句理由對**整批**工具顯示一次。
 - 🔧 **動作** — 工具與關鍵參數(Bash 指令 / 檔名 / skill 名 / MCP…),左側圓點是狀態(執行中 / 完成 / 錯誤)。
@@ -122,7 +125,7 @@ AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 > 理由來源是 agent 自己的敘述文字(操控、觀察兩種模式都有)。模型的「內心思考」(extended thinking)在逐字稿裡
 > 是被清空的,無法顯示。沒有前置敘述的工具就只顯示動作,屬正常。
 
-右側「對話」欄則只留**真對話**:你的任務指令 + agent 給你的總結/回答(逐步理由已移到左側,不再洗版)。
+右側「對話」欄則只留**真對話**:你的任務指令 + agent 給你的總結/回答(逐步細節都在左側彈窗,不洗版對話)。
 
 ## 測試
 
@@ -167,7 +170,7 @@ web/src/                前端 (Vite + React)
   store.ts              純函式 reducer applyPacket:snapshot 初始化 + seq 去重 + 事件套用 + mode
   buildAgentBlocks.ts   扁平節點 → 每個 agent 一個區塊(可展開工具 / MCP、subagent 為子區塊)
   useSession.ts         WebSocket 生命週期(1 秒重連)+ 控制/切換指令 + 樂觀更新
-  components/           AgentBlocks · Conversation · ApprovalModal · SourcePicker
+  components/           AgentList · AgentModal · Conversation · ApprovalModal · SourcePicker
 docs/superpowers/       設計 spec 與實作計畫
 NOTES.md                SDK / 逐字稿觀察筆記(spike 實測校正結果)
 ```

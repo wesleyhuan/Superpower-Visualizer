@@ -133,11 +133,15 @@ AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 > On a source switch, the backend calls `store.reset()` and re-sends a full snapshot; the client
 > replaces everything, so no nodes leak from the previous session.
 
-### Reading the left "Agents" panel — ReAct steps (Thought → Action → Result)
+### Reading the left "Agents" panel — list + popup
 
-Each agent on the left is an expandable block; a new subagent becomes a child block with an "assigned
-task" link above it. Every step inside a block follows the ReAct paradigm so you can see **why** the
-agent did what it did:
+The left panel is an **agent list** (main agent + each subagent); each row shows its name / status /
+step count / subagent count. **Click any row → a centered popup** opens with that agent's full task.
+The popup lists the subagents it dispatched as chips at the top (click a chip to switch within the same
+window), and its header has prev / next plus a "`current / total`" position — use `←` `→` or the arrow
+keys to move between agents, and `Esc` / clicking the scrim / ✕ to close.
+
+Every step inside the popup follows the ReAct paradigm so you can see **why** the agent did what it did:
 
 - 💡 **Thought (reason)** — the narration just before the agent acts (e.g. "let me look at the project
   structure to check whether it's empty"). One reason is shown once per **batch** of tools.
@@ -151,8 +155,8 @@ agent did what it did:
 > no preceding narration simply shows the action only — that's normal.
 
 The right "Conversation" panel keeps only the **real dialogue**: your task instructions + the agent's
-summaries/answers to you (the step-by-step reasoning has moved to the left, so it no longer floods the
-chat).
+summaries/answers to you (the step-by-step detail lives in the left-side popup, so it no longer floods
+the chat).
 
 ## Tests
 
@@ -198,7 +202,7 @@ web/src/                frontend (Vite + React)
   store.ts              pure reducer applyPacket: snapshot init + seq dedupe + event apply + mode
   buildAgentBlocks.ts   flat nodes → one block per agent (expandable tools / MCP, subagents as child blocks)
   useSession.ts         WebSocket lifecycle (1s reconnect) + control/switch commands + optimistic updates
-  components/           AgentBlocks · Conversation · ApprovalModal · SourcePicker
+  components/           AgentList · AgentModal · Conversation · ApprovalModal · SourcePicker
 docs/superpowers/       design specs and implementation plans
 NOTES.md                SDK / transcript notes (findings calibrated from spike experiments)
 ```

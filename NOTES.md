@@ -163,3 +163,14 @@
 - **實測**(3 對話):節點 186 / 120 / 35,subagent 4 / 0 / 2,reason 涵蓋 84% / 100% / 14%(14% 是該 session 的 toolAction 多與 toolSummary 相同,刻意不重複顯示)。
 - **測試**:`antigravityProto`(手工組 protobuf fixture)、`translateAntigravity`、`antigravitySessions` / `antigravitySource`(node:sqlite 合成 .db)、`sourceSystems`。後端 66 / 前端 33 全綠、`tsc` 乾淨。
 - **YAGNI**:跨 db subagent 連樹、type-15 長篇 thinking 顯示、Antigravity 操控(無 SDK 途徑)、Codex(此機未裝)。
+
+## Agents 面板改為清單 + 彈窗(2026-07-17)
+
+左側從「行內展開的區塊」改成**乾淨清單 + 置中彈窗**(依互動 mockup + 使用者三項決定:細節一律進彈窗、
+subagent 同窗切換、← → 導覽帶位置文字)。純前端。
+
+- `flattenAgents(main, mainTitle)` 把區塊樹深度優先攤平成 `AgentEntry[]`(main 在前)。
+- `AgentList`(點列 `onOpen(i)`)+ `AgentModal`(時間軸 + subagent chip 同窗切換 + ← → / 鍵盤導覽 + `i/n` 位置 + Esc/✕/scrim 關)。
+- `WorkItem` / `ReasonLine` / `itemKind` / `firstLine` 從舊 `AgentBlocks` 搬進 `AgentModal`;舊元件與樣式(`.agent-block/.ab-*/.subgroup/.subassign`)移除,`witem/st-dot/wkind/wreason/dump` 保留重用。
+- 版面沿用 `min-width:0` / `overflow-wrap:anywhere`(彈窗 760px 不爆);明暗主題沿用 tokens。
+- 實測(Antigravity orchestrator,186 步):清單 5 列、彈窗 182 工作項目 · 152 理由、chip/導覽/鍵盤/關閉皆正常。
