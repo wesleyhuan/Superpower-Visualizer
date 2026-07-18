@@ -70,3 +70,19 @@ function extractJson(text: string): string | null {
   if (start === -1 || end === -1 || end < start) return null
   return text.slice(start, end + 1)
 }
+
+export type AnalyzeQuery = (prompt: string) => Promise<string>
+
+// 組 prompt → 呼叫審查 query → 解析;任何失敗都回 warn fallback(不拋出)。
+export async function runAnalysis(trace: AnalysisTrace, queryImpl: AnalyzeQuery): Promise<AnalysisResult> {
+  const prompt = buildAnalysisPrompt(trace)
+  try {
+    const text = await queryImpl(prompt)
+    console.log('[analyze] 收到審查回覆,長度', text.length)
+    return parseVerdict(text)
+  } catch (err) {
+    console.error('[analyze] 審查 query 失敗:', err)
+    const msg = err instanceof Error ? err.message : String(err)
+    return { verdict: 'warn', summary: `分析失敗:${msg}`, findings: [] }
+  }
+}

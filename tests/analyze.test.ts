@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAnalysisPrompt, parseVerdict } from '../src/analyze'
+import { buildAnalysisPrompt, parseVerdict, runAnalysis } from '../src/analyze'
 import type { AnalysisTrace } from '../src/types'
 
 const trace: AnalysisTrace = {
@@ -56,5 +56,20 @@ describe('parseVerdict', () => {
     const r = parseVerdict('{"verdict":"bad","summary":"s","findings":[{"severity":"med","step":1}]}')
     expect(r.findings[0].issue).toBe('')
     expect(r.findings[0].suggestion).toBe('')
+  })
+})
+
+describe('runAnalysis', () => {
+  it('注入回 JSON 的假 query → 得對應結果', async () => {
+    const fake = async () => '{"verdict":"ok","summary":"good","findings":[]}'
+    const r = await runAnalysis(trace, fake)
+    expect(r.verdict).toBe('ok')
+    expect(r.summary).toBe('good')
+  })
+  it('query 丟例外 → warn fallback,且不拋出', async () => {
+    const boom = async () => { throw new Error('SDK 掛了') }
+    const r = await runAnalysis(trace, boom)
+    expect(r.verdict).toBe('warn')
+    expect(r.summary).toContain('SDK 掛了')
   })
 })
