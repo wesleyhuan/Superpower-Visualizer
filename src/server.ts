@@ -8,6 +8,8 @@ import { makeObserveSource, workspaceFor, listObservableSessions } from './sourc
 import type { SourceSystem } from './sourceSystems'
 import { translate } from './translator'
 import { realRunQuery, resolveWorkspace } from './agentAdapter'
+import { runAnalysis } from './analyze'
+import { realAnalyzeQuery } from './analyzeQuery'
 import type { ControlCommand } from './types'
 
 type Packet = { type: 'event'; seq: number; event: unknown }
@@ -113,6 +115,23 @@ export function createServer() {
     else if (cmd.type === 'approve') mgr.approveTool(cmd.toolUseId, cmd.allow)
     else if (cmd.type === 'followup') { emitUserMessage(cmd.text); mgr.sendFollowup(cmd.text) }
     res.json({ ok: true })
+  })
+
+  // 合理性分析:把某個 agent 的 ReAct 軌跡交給另一個 Claude 審查(無狀態,不進 store/WS/SessionManager)。
+  app.post('/analyze', async (req, res) => {
+    const trace = req.body?.trace
+    if (!trace || !Array.isArray(trace.steps)) {
+      console.error('[server] /analyze 缺少 trace 或 steps')
+      return res.status(400).json({ error: 'missing trace' })
+    }
+    console.log('[server] /analyze', trace.title, trace.steps.length, '步')
+    try {
+      const result = await runAnalysis(trace, realAnalyzeQuery)
+      res.json(result)
+    } catch (err) {
+      console.error('[server] /analyze 失敗:', err)
+      res.status(500).json({ error: String(err) })
+    }
   })
 
   const server = app.listen(3001, () => console.log('[server] http on :3001'))
