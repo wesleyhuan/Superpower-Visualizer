@@ -61,3 +61,36 @@ export type SessionInfo = ClaudeSessionInfo | AntigravitySessionInfo
 export type SnapshotPacket = { type: 'snapshot'; seq: number; nodes: TreeNode[]; logs: LogEntry[]; workspace: string; messages: ConversationEntry[]; mode?: Mode }
 export type EventPacket = { type: 'event'; seq: number; event: FrontendEvent }
 export type Packet = SnapshotPacket | EventPacket
+
+// ── 合理性分析(POST /analyze):鏡射後端 src/types.ts ──
+export interface AnalysisStep {
+  index: number
+  label: string
+  kind: string       // TOOL / SKILL / MCP / SUB
+  status: string
+  reason?: string
+  output?: string
+}
+export interface AnalysisTrace {
+  title: string
+  kind: 'main' | 'sub'
+  steps: AnalysisStep[]
+}
+export type Verdict = 'ok' | 'warn' | 'bad'
+export type Severity = 'high' | 'med' | 'low'
+export interface Finding {
+  severity: Severity
+  step: number
+  issue: string
+  suggestion: string
+}
+export interface AnalysisResult {
+  verdict: Verdict
+  summary: string
+  findings: Finding[]
+}
+// 前端 UI 狀態(每個 agent key 一份;放這裡供 App 與 AgentModal 共用,避免循環 import)。
+export interface AnalysisState {
+  status: 'loading' | 'done' | 'error'
+  result?: AnalysisResult
+}
