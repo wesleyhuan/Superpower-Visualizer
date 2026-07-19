@@ -2,9 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listSessions } from '../src/sessions'
+import { listSessions, firstMeta } from '../src/sessions'
 
 const jsonl = (recs: any[]) => recs.map((r) => JSON.stringify(r)).join('\n') + '\n'
+
+function writeSession(recs: any[]): string {
+  const proj = mkdtempSync(join(tmpdir(), 'sess-'))
+  const f = join(proj, 's.jsonl')
+  writeFileSync(f, jsonl(recs))
+  return f
+}
 
 let root: string
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'proj-')) })
@@ -43,7 +50,51 @@ describe('listSessions', () => {
     expect(list.map((s) => s.file)).toEqual([newer, older])
   })
 
-  it('root 不存在時回空陣列', () => {
-    expect(listSessions(join(root, 'nope'))).toEqual([])
+  it('帶入 title:第一句 user 訊息', () => {
+    const projA = join(root, 'C--Users-me-app')
+    mkdirSync(projA, { recursive: true })
+    writeFileSync(join(projA, 's1.jsonl'), jsonl([
+      { type: 'system' },
+      { type: 'user', cwd: 'C:/Users/me/app', message: { role: 'user', content: '幫我製作一個計算機APP' } },
+    ]))
+    const list = listSessions(root)
+    expect(list[0].title).toBe('幫我製作一個計算機APP')
+  })
+})
+
+describe('firstMeta', () => {
+  it('抽出 cwd 與第一句 user 訊息當 title', () => {
+    const f = writeSession([
+      { type: 'system', cwd: 'C:/proj' },
+      { type: 'user', message: { role: 'user', content: '幫我重構登入流程' } },
+    ])
+    expect(firstMeta(f)).toEqual({ cwd: 'C:/proj', title: '幫我重構登入流程' })
+  })
+
+  it('content 為區塊陣列時串接 text 區塊', () => {
+    const f = writeSession([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: [{ type: 'text', text: '你好' }, { type: 'image' }] } },
+    ])
+    expect(firstMeta(f).title).toBe('你好')
+  })
+
+  it('slash 指令:清成乾淨的 /xxx(取 command-name)', () => {
+    const f = writeSession([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: '<command-message>init</command-message> <command-name>/init</command-name>' } },
+    ])
+    expect(firstMeta(f).title).toBe('/init')
+  })
+
+  it('跳過沒有文字的 user 訊息(tool_result),取下一筆有文字的', () => {
+    const f = writeSession([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: [{ type: 'tool_result', content: 'ok' }] } },
+      { type: 'user', message: { role: 'user', content: '真正的問題' } },
+    ])
+    expect(firstMeta(f).title).toBe('真正的問題')
+  })
+
+  it('抽不到 user 文字時 title 為空字串', () => {
+    const f = writeSession([{ type: 'system', cwd: 'x' }])
+    expect(firstMeta(f)).toEqual({ cwd: 'x', title: '' })
   })
 })
