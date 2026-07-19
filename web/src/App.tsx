@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSession, type SessionDeps } from './useSession'
-import { buildAgentBlocks, flattenAgents, buildAnalysisTrace } from './buildAgentBlocks'
+import { buildAgentBlocks, flattenAgents } from './buildAgentBlocks'
 import { AgentList } from './components/AgentList'
 import { AgentModal } from './components/AgentModal'
 import { Conversation } from './components/Conversation'

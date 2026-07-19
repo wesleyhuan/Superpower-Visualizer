@@ -49,7 +49,9 @@ export function wireEvents(
 
 export function createServer() {
   const app = express()
-  app.use(express.json())
+  // 放寬 body 上限:大型 agent 的 ReAct trace(如 186 步)JSON 可能超過預設 100KB,
+  // 否則 /analyze 會回 413 → 前端 res.json() 失敗 → 靜默退成一般「分析失敗」。
+  app.use(express.json({ limit: '5mb' }))
   const store = new SnapshotStore()
   const mgr = new SessionManager({ runQuery: realRunQuery })
   const clients = new Set<WebSocket>()
