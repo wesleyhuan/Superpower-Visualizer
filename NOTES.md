@@ -174,3 +174,19 @@ subagent 同窗切換、← → 導覽帶位置文字)。純前端。
 - `WorkItem` / `ReasonLine` / `itemKind` / `firstLine` 從舊 `AgentBlocks` 搬進 `AgentModal`;舊元件與樣式(`.agent-block/.ab-*/.subgroup/.subassign`)移除,`witem/st-dot/wkind/wreason/dump` 保留重用。
 - 版面沿用 `min-width:0` / `overflow-wrap:anywhere`(彈窗 760px 不爆);明暗主題沿用 tokens。
 - 實測(Antigravity orchestrator,186 步):清單 5 列、彈窗 182 工作項目 · 152 理由、chip/導覽/鍵盤/關閉皆正常。
+
+## 合理性分析:用另一個 Claude 審查 ReAct(2026-07-19)
+
+在 agent 彈窗加「分析合理性」:把該 agent 的 ReAct 軌跡交給**另一個 Claude**審查,回結構化
+`{ verdict, summary, findings[] }`(妥當/有疑慮/有問題 + 總評 + 指摘)。
+
+- **無狀態**:獨立 `POST /analyze`,不進 SnapshotStore、不走 WS event/seq、不經 SessionManager → 不干擾正在跑的 agent。
+- 核心純函式:`buildAnalysisPrompt`(組審查 prompt,要求只回固定 schema JSON、繁中)、
+  `parseVerdict`(容錯抽 JSON:去 ```json fence、第一個`{`到最後一個`}`;驗證夾限;解析失敗回 `warn` fallback 不拋錯)。
+- SDK 一次性 query:`realAnalyzeQuery`,`allowedTools: []`(審查只讀文字推理)、`maxTurns: 1`,沿用 `resolveWorkspace()`。
+- 前端:`buildAnalysisTrace` 把工作項目攤成編號軌跡(output 截斷 500 字);`App` 以 agent key 快取 loading/done/error;
+  指摘 `step>0` 才顯示可點「步驟 N」,點了捲到並高亮對應工作項目(`data-step` + flash);`Finding` 不存 action,面板用 `cur.items[step-1]?.label` 回查動作標籤。
+- **踩雷(E2E 才抓到)**:前端走相對路徑 `POST /analyze`,dev 需經 **Vite proxy** 轉到 :3001;proxy allowlist 漏了 `/analyze`,
+  導致請求打到 Vite 回空 body、前端 `res.json()` 拋「Unexpected end of JSON input」。修法:`web/vite.config.ts` proxy 補 `/analyze`。
+- **實測**(觀察 uigen 的 /init,21 步):badge 妥當、「3 個指摘 · 0 高 · 0 中 · 3 低」、繁中總評、3 張指摘卡(步驟 1→Read、步驟 21→Write,整體性指摘無步驟鈕);後端 prompt 11148 字 → 回覆 874 字;明暗兩色皆正常;觀察 session 唯讀不受影響。
+- **YAGNI**:複製/下載、逐字串流、分數(0–100)、換別家 LLM、整 session 一次分析、落地儲存。

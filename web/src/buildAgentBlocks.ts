@@ -1,4 +1,5 @@
 import type { TreeNode, NodeStatus } from './wireTypes'
+import type { AnalysisTrace, AnalysisStep } from './wireTypes'
 
 // 一個 agent 區塊:主 agent(node=null)或某個 subagent 節點。
 export interface AgentBlock {
@@ -81,4 +82,30 @@ export function flattenAgents(main: AgentBlock, mainTitle: string): AgentEntry[]
   }
   visit(main, mainTitle, 'main')
   return out
+}
+
+// 工具分類:與 AgentModal 的 itemKind 對齊(顯示用標籤)。
+function stepKind(node: TreeNode): string {
+  if (node.type === 'skill') return 'SKILL'
+  if (node.type === 'subagent') return 'SUB'
+  if (/^mcp__/.test(node.label) || /^mcp__/.test(node.id)) return 'MCP'
+  return 'TOOL'
+}
+
+const OUTPUT_MAX = 500
+
+// 把一個 agent 的工作項目攤成可讀、已編號的 ReAct 軌跡,供 POST /analyze。
+export function buildAnalysisTrace(entry: AgentEntry, outputByNode: Record<string, string>): AnalysisTrace {
+  const steps: AnalysisStep[] = entry.items.map((n, i) => {
+    const out = outputByNode[n.id]
+    return {
+      index: i + 1,
+      label: n.label,
+      kind: stepKind(n),
+      status: n.status,
+      ...(n.reason ? { reason: n.reason } : {}),
+      ...(out ? { output: out.slice(0, OUTPUT_MAX) } : {}),
+    }
+  })
+  return { title: entry.title, kind: entry.kind, steps }
 }

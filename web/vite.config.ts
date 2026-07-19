@@ -12,6 +12,7 @@ export default defineConfig({
       '/observe': 'http://localhost:3001',
       '/new-agent': 'http://localhost:3001',
       '/sessions': 'http://localhost:3001',
+      '/analyze': 'http://localhost:3001',
     },
   },
   test: {

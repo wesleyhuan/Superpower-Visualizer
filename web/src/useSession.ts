@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { applyPacket, resolvePending, initialState, type SessionState } from './store'
-import type { Packet, ControlCommand, SessionInfo, SourceSystem } from './wireTypes'
+import type { Packet, ControlCommand, SessionInfo, SourceSystem, AnalysisTrace, AnalysisResult } from './wireTypes'
 
 export interface SessionDeps { wsUrl?: string; WebSocketImpl?: typeof WebSocket; fetchImpl?: typeof fetch }
 
@@ -73,5 +73,20 @@ export function useSession(deps: SessionDeps = {}) {
     }
   }, [doFetch])
 
-  return { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions }
+  // 合理性分析:POST /analyze,回傳結構化結果;失敗回 warn fallback(不拋出)。
+  const analyze = useCallback(async (trace: AnalysisTrace): Promise<AnalysisResult> => {
+    try {
+      const res = await doFetch('/analyze', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ trace }),
+      })
+      return await res.json()
+    } catch (err) {
+      console.error('[analyze] 請求失敗', err)
+      return { verdict: 'warn', summary: `分析失敗:${String(err)}`, findings: [] }
+    }
+  }, [doFetch])
+
+  return { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions, analyze }
 }

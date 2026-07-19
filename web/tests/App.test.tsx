@@ -140,4 +140,25 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     fireEvent.click(screen.getByRole('button', { name: /幫我做計算機/ }))
     expect(screen.getByText('Bash: ls')).toBeInTheDocument()
   })
+
+  it('彈窗點「分析合理性」→ POST /analyze 帶 trace → 回傳後顯示判定', async () => {
+    const result = { verdict: 'warn', summary: '有缺口', findings: [{ severity: 'high', step: 1, issue: '風險', suggestion: '先讀檔' }] }
+    fetchImpl = vi.fn((path: string) => {
+      if (path === '/analyze') return Promise.resolve({ ok: true, json: () => Promise.resolve(result) })
+      return Promise.resolve({ ok: true })
+    }) as unknown as typeof fetchImpl
+    renderApp()
+    push(snapshot())
+    push({ type: 'event', seq: 1, event: { kind: 'message', role: 'user', text: '重構登入' } })
+    push({ type: 'event', seq: 2, event: { kind: 'tree:node', node: { id: 'a', parentId: null, type: 'tool', label: 'Grep: password', status: 'done' } } })
+
+    fireEvent.click(screen.getByRole('button', { name: /重構登入/ }))          // 開彈窗
+    fireEvent.click(await screen.findByRole('button', { name: /分析合理性/ }))  // 觸發分析
+
+    const call = fetchImpl.mock.calls.find((c) => c[0] === '/analyze')
+    expect(call).toBeTruthy()
+    expect(JSON.parse((call![1] as RequestInit).body as string).trace.steps).toHaveLength(1)
+    expect(await screen.findByText('有缺口')).toBeInTheDocument()
+    expect(screen.getByText('有疑慮')).toBeInTheDocument()
+  })
 })
