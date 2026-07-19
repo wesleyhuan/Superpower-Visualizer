@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSession, type SessionDeps } from './useSession'
-import { buildAgentBlocks, flattenAgents } from './buildAgentBlocks'
+import { buildAgentBlocks, flattenAgents, buildAnalysisTrace } from './buildAgentBlocks'
 import { AgentList } from './components/AgentList'
 import { AgentModal } from './components/AgentModal'
 import { Conversation } from './components/Conversation'
 import { ApprovalModal } from './components/ApprovalModal'
 import { SourcePicker } from './components/SourcePicker'
-import type { LogEntry } from './wireTypes'
+import type { LogEntry, AnalysisTrace, AnalysisState } from './wireTypes'
 
 type Theme = 'light' | 'dark'
 
@@ -34,7 +34,7 @@ const SunPath = 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5 19 19M3 12h2M19 12h2M5 19
 const MoonPath = 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z'
 
 export function App({ deps }: { deps?: SessionDeps } = {}) {
-  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions } = useSession(deps)
+  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions, analyze } = useSession(deps)
   const [theme, toggleTheme] = useTheme()
   const [draft, setDraft] = useState('')
   const isObserving = state.mode === 'observe'
@@ -44,6 +44,16 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
   const mainTitle = state.messages.find((m) => m.role === 'user')?.text ?? '主 Agent'
   const entries = useMemo(() => flattenAgents(main, mainTitle), [main, mainTitle])
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const [analyses, setAnalyses] = useState<Record<string, AnalysisState>>({})
+  const onAnalyze = useCallback((key: string, trace: AnalysisTrace) => {
+    setAnalyses((m) => ({ ...m, [key]: { status: 'loading' } }))
+    analyze(trace)
+      .then((result) => setAnalyses((m) => ({ ...m, [key]: { status: 'done', result } })))
+      .catch((err) => {
+        console.error('[App] 分析失敗', err)
+        setAnalyses((m) => ({ ...m, [key]: { status: 'error' } }))
+      })
+  }, [analyze])
   const hasStarted = state.order.length > 0 || state.messages.some((m) => m.role === 'user')
 
   const send = () => {
@@ -146,6 +156,8 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
           entries={entries}
           index={openIndex}
           outputByNode={outputs}
+          analysisByKey={analyses}
+          onAnalyze={onAnalyze}
           onIndex={setOpenIndex}
           onClose={() => setOpenIndex(null)}
         />
