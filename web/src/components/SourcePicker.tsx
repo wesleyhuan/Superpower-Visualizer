@@ -18,12 +18,16 @@ function shortProject(p: string): string {
 // 每筆 session 的標題 / 副標,依系統不同。
 function titleOf(s: SessionInfo): string {
   if (s.system === 'antigravity') return s.identity || s.file.split(/[\\/]/).pop() || s.file
-  return s.cwd ? shortProject(s.project) : s.project
+  // Claude:優先用該對話第一句;抽不到才回退專案 slug。
+  return s.title || shortProject(s.project)
 }
 function metaOf(s: SessionInfo): string {
   const t = relTime(s.mtime)
   if (s.system === 'antigravity') return `${t} · ${s.steps} 步`
-  return t + (s.subagents > 0 ? ` · ${s.subagents} subagent` : '')
+  // slug 降為副標;但標題已回退成 slug 時就不重複顯示。
+  const slug = shortProject(s.project)
+  const prefix = s.title && s.title !== slug ? `${slug} · ` : ''
+  return prefix + t + (s.subagents > 0 ? ` · ${s.subagents} subagent` : '')
 }
 
 interface Props {

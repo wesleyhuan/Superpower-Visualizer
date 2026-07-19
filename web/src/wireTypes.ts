@@ -45,6 +45,7 @@ export interface ClaudeSessionInfo {
   file: string
   project: string
   cwd: string
+  title: string   // 該對話第一句 user 訊息(可能為空 → 回退顯示 slug)
   mtime: number
   subagents: number
 }
