@@ -154,6 +154,14 @@ Every step inside the popup follows the ReAct paradigm so you can see **why** th
 > model's inner "extended thinking" is redacted (empty) in transcripts and can't be shown. A tool with
 > no preceding narration simply shows the action only — that's normal.
 
+**Reasonableness analysis (⚖):** inside the popup, click **"分析合理性" (Analyze reasonableness)** to
+send *this agent's* ReAct trace to a **separate Claude** (an independent review session — it does not
+touch the observed/controlled agent). It returns a structured verdict — **妥當 / 有疑慮 / 有問題**
+(sound / questionable / problematic) — a short summary, and a list of findings, each with a severity
+(high/med/low), the step it points at (click to jump + highlight the matching work item), and a
+suggested fix. Runs through a stateless `POST /analyze` endpoint; results are cached per agent for the
+session (not persisted). Works in both control and observe mode.
+
 The right "Conversation" panel keeps only the **real dialogue**: your task instructions + the agent's
 summaries/answers to you (the step-by-step detail lives in the left-side popup, so it no longer floods
 the chat).
