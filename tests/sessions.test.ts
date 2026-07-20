@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { listSessions, firstMeta } from '../src/sessions'
+import { ANALYSIS_PROMPT_OPENING } from '../src/analyze'
 
 const jsonl = (recs: any[]) => recs.map((r) => JSON.stringify(r)).join('\n') + '\n'
 
@@ -59,6 +60,19 @@ describe('listSessions', () => {
     ]))
     const list = listSessions(root)
     expect(list[0].title).toBe('幫我製作一個計算機APP')
+  })
+
+  it('排除 /analyze 自己產生的審查 session(第一句以審查 prompt 開頭)', () => {
+    const proj = join(root, 'p')
+    mkdirSync(proj, { recursive: true })
+    writeFileSync(join(proj, 'real.jsonl'), jsonl([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: '幫我修 bug' } },
+    ]))
+    writeFileSync(join(proj, 'analyze.jsonl'), jsonl([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: `${ANALYSIS_PROMPT_OPENING}\n這個 agent 的任務:xxx` } },
+    ]))
+    const list = listSessions(root)
+    expect(list.map((s) => s.title)).toEqual(['幫我修 bug'])
   })
 })
 
