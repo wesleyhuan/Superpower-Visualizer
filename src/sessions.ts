@@ -1,6 +1,7 @@
 import { existsSync, statSync, readdirSync, openSync, readSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { ANALYSIS_PROMPT_OPENING } from './analyze'
 
 export interface SessionInfo {
   file: string      // 主 .jsonl 絕對路徑
@@ -42,6 +43,8 @@ export function listSessions(root = join(homedir(), '.claude', 'projects')): Ses
         const st = statSync(file)
         if (!st.isFile()) continue
         const meta = firstMeta(file)
+        // 略過 /analyze 一次性 query 自己產生的審查逐字稿(第一句就是審查 prompt)。
+        if (meta.title.startsWith(ANALYSIS_PROMPT_OPENING)) continue
         out.push({
           file,
           project,

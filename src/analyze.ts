@@ -1,5 +1,9 @@
 import type { AnalysisTrace, AnalysisResult, Verdict, Severity, Finding } from './types'
 
+// 審查 prompt 的開頭句。也用來把「/analyze 自己產生的」session 從觀察清單過濾掉
+// (見 sessions.ts):prompt 與過濾共用同一字串,避免日後改字走鐘。
+export const ANALYSIS_PROMPT_OPENING = '你是一位資深工程師,正在審查「另一個 AI agent」完成任務的過程是否合理。'
+
 // 把一個 agent 的 ReAct 軌跡組成給「審查用 Claude」的 prompt。
 // 要求:只回 JSON、schema 固定、語言繁中。
 export function buildAnalysisPrompt(trace: AnalysisTrace): string {
@@ -10,7 +14,7 @@ export function buildAnalysisPrompt(trace: AnalysisTrace): string {
     return parts.join('\n')
   })
   return [
-    '你是一位資深工程師,正在審查「另一個 AI agent」完成任務的過程是否合理。',
+    ANALYSIS_PROMPT_OPENING,
     `這個 agent 的任務:${trace.title}`,
     '',
     '以下是它的 ReAct 軌跡(想法 → 動作 → 結果),已編號:',
