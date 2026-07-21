@@ -5,6 +5,7 @@ import { SessionManager } from './sessionManager'
 import { SourceController } from './sourceController'
 import { ReActAssembler } from './reactAssembler'
 import { makeObserveSource, workspaceFor, listObservableSessions } from './sourceSystems'
+import { listDirs, makeDir } from './dirs'
 import type { SourceSystem } from './sourceSystems'
 import { translate } from './translator'
 import { realRunQuery, resolveWorkspace } from './agentAdapter'
@@ -94,9 +95,10 @@ export function createServer() {
     res.json({ ok: true })
   })
 
-  // 回到 Route B control 空白狀態(準備開新 agent)。
-  app.post('/new-agent', (_req, res) => {
-    controller.toControl()
+  // 回到 Route B control 空白狀態(準備開新 agent);可帶使用者選的工作目錄。
+  app.post('/new-agent', (req, res) => {
+    const cwd = req.body?.cwd ? String(req.body.cwd) : undefined
+    controller.toControl(cwd)
     res.json({ ok: true })
   })
 
@@ -104,7 +106,7 @@ export function createServer() {
     if (controller.isObserving()) controller.toControl() // 從觀察切回操控,清空畫面
     const prompt = String(req.body?.prompt ?? '')
     emitUserMessage(prompt)
-    mgr.start(prompt)
+    mgr.start(prompt, controller.controlCwd())
     res.json({ ok: true })
   })
 
@@ -133,6 +135,28 @@ export function createServer() {
     } catch (err) {
       console.error('[server] /analyze 失敗:', err)
       res.status(500).json({ error: String(err) })
+    }
+  })
+
+  // 目錄瀏覽:列某路徑下的子資料夾(path 省略 = 磁碟根視圖)。給新 Agent 選工作目錄用。
+  app.get('/dirs', (req, res) => {
+    try {
+      res.json(listDirs(String(req.query.path ?? '')))
+    } catch (err) {
+      console.error('[server] /dirs 失敗:', err)
+      res.status(400).json({ error: String(err) })
+    }
+  })
+
+  // 在指定父目錄下建立空資料夾(「建立專案」)。
+  app.post('/mkdir', (req, res) => {
+    try {
+      const parent = String(req.body?.parent ?? '')
+      const name = String(req.body?.name ?? '')
+      res.json({ path: makeDir(parent, name) })
+    } catch (err) {
+      console.error('[server] /mkdir 失敗:', err)
+      res.status(400).json({ error: String(err) })
     }
   })
 
