@@ -95,3 +95,11 @@ export interface AnalysisState {
   status: 'loading' | 'done' | 'error'
   result?: AnalysisResult
 }
+
+// 目錄瀏覽(GET /dirs、POST /mkdir):鏡射後端 src/dirs.ts
+export interface DirListing {
+  path: string
+  parent: string | null
+  drives?: string[]
+  entries: string[]
+}
