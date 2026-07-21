@@ -17,6 +17,7 @@ export class SourceController {
   workspace: string
   private source: Source | null = null
   private backfilling = false
+  private _controlCwd?: string
 
   constructor(
     private store: SnapshotStore,
@@ -71,14 +72,19 @@ export class SourceController {
     this.broadcastSnapshot() // 一次送出整份,避免 backfill 幾千筆 event 洗版
   }
 
-  toControl(): void {
-    console.log('[controller] 切換到 control')
+  toControl(cwd?: string): void {
+    console.log('[controller] 切換到 control', cwd ?? '(預設)')
     this.source?.stop()
     this.source = null
     this.store.reset()
     this.assembler.reset()
     this.mode = 'control'
-    this.workspace = this.controlWorkspace()
+    this._controlCwd = cwd
+    this.workspace = cwd ?? this.controlWorkspace()
     this.broadcastSnapshot()
+  }
+
+  controlCwd(): string | undefined {
+    return this._controlCwd
   }
 }

@@ -92,6 +92,10 @@ powershell -Command "Stop-Process -Id <PID> -Force"
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 ```
 
+**或在 UI 直接選:** 開來源下拉 →「**＋新 Agent**」現在會彈出**工作目錄選擇器** —— 麵包屑導覽、上一層、
+Windows 磁碟根,還能當場建立空資料夾,按「**使用這個目錄**」就用該資料夾當下一個 agent 的工作目錄。
+`AGENT_WORKSPACE` 變成選擇器的起始預設。(僅控制模式;觀察模式不變。)
+
 ### B. 觀察模式(Route A)— 唯讀旁觀其他 coding agent
 
 1. 點「來源」下拉 → **先選系統**:「觀察 Claude session」或「觀察 Antigravity 對話」。

@@ -33,3 +33,13 @@ describe('buildOptions', () => {
     expect(spy).toHaveBeenCalledWith('Write', { file_path: 'x' }, { toolUseId: 'toolu_ABC' })
   })
 })
+
+describe('buildOptions cwd', () => {
+  const noop = async () => ({ behavior: 'deny', message: '' } as any)
+  it('帶 cwd → 用該 cwd', () => {
+    expect(buildOptions(noop, new AbortController(), 'C:/x').cwd).toBe('C:/x')
+  })
+  it('沒帶 cwd → 回退 resolveWorkspace()', () => {
+    expect(buildOptions(noop, new AbortController()).cwd).toBe(resolveWorkspace())
+  })
+})

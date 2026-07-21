@@ -107,6 +107,12 @@ for Read / Write / Bash resolve against it); the header shows the current workin
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 ```
 
+**Or pick it in the UI:** open the source dropdown → **＋ New Agent** now opens a **directory picker** —
+browse folders (breadcrumb + parent + drive roots on Windows), optionally create a new empty folder, and
+click **"使用這個目錄" (Use this folder)** to launch the next agent with that folder as its working
+directory. `AGENT_WORKSPACE` becomes the default the picker starts from. (Control mode only; observe mode
+is unchanged.)
+
 ### B. Observe mode (Route A) — read-only watching of another coding agent
 
 1. Open the "source" dropdown → **pick a system first**: "Observe a Claude session" or "Observe an

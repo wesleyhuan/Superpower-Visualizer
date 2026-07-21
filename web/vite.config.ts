@@ -13,6 +13,8 @@ export default defineConfig({
       '/new-agent': 'http://localhost:3001',
       '/sessions': 'http://localhost:3001',
       '/analyze': 'http://localhost:3001',
+      '/dirs': 'http://localhost:3001',
+      '/mkdir': 'http://localhost:3001',
     },
   },
   test: {

@@ -190,3 +190,20 @@ subagent 同窗切換、← → 導覽帶位置文字)。純前端。
   導致請求打到 Vite 回空 body、前端 `res.json()` 拋「Unexpected end of JSON input」。修法:`web/vite.config.ts` proxy 補 `/analyze`。
 - **實測**(觀察 uigen 的 /init,21 步):badge 妥當、「3 個指摘 · 0 高 · 0 中 · 3 低」、繁中總評、3 張指摘卡(步驟 1→Read、步驟 21→Write,整體性指摘無步驟鈕);後端 prompt 11148 字 → 回覆 874 字;明暗兩色皆正常;觀察 session 唯讀不受影響。
 - **YAGNI**:複製/下載、逐字串流、分數(0–100)、換別家 LLM、整 session 一次分析、落地儲存。
+
+## 新 Agent 工作目錄選擇器(2026-07-21)
+
+開新 Agent 時用 UI 選(或當場建立)資料夾當 cwd,取代只能靠 `AGENT_WORKSPACE` 環境變數固定。
+
+- **為何後端列目錄**:瀏覽器安全機制不給網頁真實路徑(`showDirectoryPicker` 只給沙箱 handle、
+  `<input webkitdirectory>` 只給相對路徑),而 agent 在後端啟動需要真實 cwd。故後端 `GET /dirs` 列子資料夾、
+  前端 `WorkspacePicker` 導覽選取。`POST /mkdir` 建空資料夾(只 mkdir、不 scaffold;name 防呆:不含分隔符 / 非 . ..)。
+- **cwd 穿線**:`buildOptions` / `realRunQuery` / `SessionManager.start` / `SourceController.toControl` 都加 `cwd?`,
+  無值回退 `resolveWorkspace()`;`AGENT_WORKSPACE` 降為預設。`/new-agent { cwd? }` → `toControl(cwd)` 存起來,
+  `/start` 用 `controller.controlCwd()` 帶給 `mgr.start`。header 走 snapshot 立即反映。
+- **踩雷(E2E 才抓到)**:`loadDirs`/`makeDir` 走相對路徑,dev 需經 **Vite proxy** 轉到 :3001;proxy allowlist
+  漏了 `/dirs` `/mkdir`,回傳 index.html → `res.json()` 拋 `Unexpected token '<'`。修法:`web/vite.config.ts` proxy 補上。
+  (與先前 `/analyze` 同一類坑;WorkspacePicker 的 catch 有印實際 error,log 一眼就看出是 HTML。)
+- **實測**:選擇器開在目前工作目錄、列子資料夾、導覽/上一層正常;建立 `src/e2e-workspace-test` → 進入該夾 →
+  「使用這個目錄」→ header 立即變該路徑 → 送 `pwd` 任務,agent 回報 cwd 正是所選資料夾。只動控制模式。
+- **不做(YAGNI)**:最近目錄、scaffold/git init、路徑沙箱、header 隨時改目錄。
