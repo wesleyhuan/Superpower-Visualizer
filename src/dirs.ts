@@ -1,4 +1,4 @@
-import { existsSync, statSync, readdirSync } from 'node:fs'
+import { existsSync, statSync, readdirSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 export interface DirListing {
@@ -46,4 +46,18 @@ function windowsDrives(): string[] {
     try { if (existsSync(d)) out.push(d) } catch { /* skip */ }
   }
   return out
+}
+
+// 在 parent 下建立一個空資料夾。防呆:name 不含路徑分隔符 / 非 . .. ;parent 須存在且是目錄。
+export function makeDir(parent: string, name: string): string {
+  if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) {
+    throw new Error(`資料夾名稱非法:${name}`)
+  }
+  if (!existsSync(parent) || !statSync(parent).isDirectory()) {
+    throw new Error(`父目錄不存在:${parent}`)
+  }
+  const full = join(parent, name)
+  if (existsSync(full)) throw new Error(`已存在:${full}`)
+  mkdirSync(full)
+  return full
 }
