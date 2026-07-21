@@ -6,6 +6,7 @@ type RunQuery = (args: {
   prompt: AsyncIterable<any>
   canUseTool: CanUseTool
   signal: AbortSignal
+  cwd?: string
 }) => AsyncIterable<any>
 
 export class SessionManager {
@@ -13,6 +14,7 @@ export class SessionManager {
   private msgCbs: ((m: any) => void)[] = []
   private awaitCbs: ((a: { toolUseId: string; name: string; input: unknown }) => void)[] = []
   private controller = new AbortController()
+  private startCwd?: string
   private inbox: any[] = []
   private inboxResolvers: ((v: IteratorResult<any>) => void)[] = []
 
@@ -74,7 +76,8 @@ export class SessionManager {
     this.inboxResolvers = []
   }
 
-  start(initialPrompt: string) {
+  start(initialPrompt: string, cwd?: string) {
+    this.startCwd = cwd
     this.pushInput({ type: 'user', message: { role: 'user', content: initialPrompt } })
     void this.consume()
   }
@@ -85,6 +88,7 @@ export class SessionManager {
         prompt: this.inputQueue(),
         canUseTool: this.canUseTool,
         signal: this.controller.signal,
+        cwd: this.startCwd,
       })
       for await (const msg of stream) {
         for (const cb of this.msgCbs) cb(msg)

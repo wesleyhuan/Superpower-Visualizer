@@ -14,10 +14,10 @@ export function resolveWorkspace(): string {
 }
 
 // 建構傳給 SDK query() 的 options(抽出以便單元測試,不需真的呼叫 SDK)。
-export function buildOptions(canUseTool: CanUseTool, abortController: AbortController): any {
+export function buildOptions(canUseTool: CanUseTool, abortController: AbortController, cwd?: string): any {
   return {
-    // 明確 pin cwd,agent 的 Read/Write/Bash 相對路徑都以此為基準。
-    cwd: resolveWorkspace(),
+    // 有帶 cwd(例如每個 session 選定的工作目錄)就用它,否則沿用原本的 pin 邏輯。
+    cwd: cwd ?? resolveWorkspace(),
     abortController,
     canUseTool: async (toolName: string, input: any, opts: any) => {
       // toolUseID 大寫(SDK 型別);缺漏時以工具名 + 時間戳當暫時 id(理論上不會發生)。
@@ -37,17 +37,19 @@ export const realRunQuery = ({
   prompt,
   canUseTool,
   signal,
+  cwd,
 }: {
   prompt: AsyncIterable<any>
   canUseTool: CanUseTool
   signal: AbortSignal
+  cwd?: string
 }): AsyncIterable<any> => {
   // 外部只給我們一個 signal,SDK 卻要整個 AbortController,橋接兩者。
   const abortController = new AbortController()
   if (signal.aborted) abortController.abort()
   else signal.addEventListener('abort', () => abortController.abort(), { once: true })
 
-  const options = buildOptions(canUseTool, abortController)
+  const options = buildOptions(canUseTool, abortController, cwd)
   console.log('[agentAdapter] workspace cwd =', options.cwd)
   return query({ prompt, options } as any) as AsyncIterable<any>
 }
