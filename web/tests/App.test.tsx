@@ -88,10 +88,11 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
       if (path.startsWith('/sessions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
         { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/proj', mtime: Date.now(), subagents: 3 },
       ] }) })
+      if (path.startsWith('/dirs')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ path: 'C:/here', parent: 'C:/', entries: [] }) })
       return Promise.resolve({ ok: true })
     }) as unknown as typeof fetchImpl
     renderApp()
-    push(snapshot())
+    push(snapshot({ workspace: 'C:/here' }))
 
     fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
     fireEvent.click(screen.getByText(/觀察 Claude session/))
@@ -101,7 +102,9 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
     fireEvent.click(await screen.findByText(/新 Agent/))
-    expect(bodyOf('/new-agent')).toEqual({})
+    // 開選擇器 → 使用目前目錄確認 → POST /new-agent { cwd }
+    fireEvent.click(await screen.findByRole('button', { name: /使用這個目錄/ }))
+    await waitFor(() => expect(bodyOf('/new-agent')).toEqual({ cwd: 'C:/here' }))
   })
 
   it('來源下拉:Claude session 有 title 時,標題顯示第一句、slug 落到副標', async () => {

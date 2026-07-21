@@ -6,6 +6,7 @@ import { AgentModal } from './components/AgentModal'
 import { Conversation } from './components/Conversation'
 import { ApprovalModal } from './components/ApprovalModal'
 import { SourcePicker } from './components/SourcePicker'
+import { WorkspacePicker } from './components/WorkspacePicker'
 import type { LogEntry, AnalysisTrace, AnalysisState } from './wireTypes'
 
 type Theme = 'light' | 'dark'
@@ -34,7 +35,7 @@ const SunPath = 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5 19 19M3 12h2M19 12h2M5 19
 const MoonPath = 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z'
 
 export function App({ deps }: { deps?: SessionDeps } = {}) {
-  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions, analyze } = useSession(deps)
+  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions, analyze, loadDirs, makeDir } = useSession(deps)
   const [theme, toggleTheme] = useTheme()
   const [draft, setDraft] = useState('')
   const isObserving = state.mode === 'observe'
@@ -44,6 +45,7 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
   const mainTitle = state.messages.find((m) => m.role === 'user')?.text ?? '主 Agent'
   const entries = useMemo(() => flattenAgents(main, mainTitle), [main, mainTitle])
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [analyses, setAnalyses] = useState<Record<string, AnalysisState>>({})
   const onAnalyze = useCallback((key: string, trace: AnalysisTrace) => {
     setAnalyses((m) => ({ ...m, [key]: { status: 'loading' } }))
@@ -80,7 +82,7 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
           <div><h1>Superpower Visualizer</h1><div className="sub">Agent 即時監控</div></div>
         </div>
         <div className="spacer" />
-        <SourcePicker mode={state.mode} onObserve={observe} onNewAgent={newAgent} loadSessions={loadSessions} />
+        <SourcePicker mode={state.mode} onObserve={observe} onNewAgent={() => setPickerOpen(true)} loadSessions={loadSessions} />
         {state.pending.length > 0 && (
           <span className="badge-await"><span className="bdot" /> {state.pending.length} 待核准</span>
         )}
@@ -163,6 +165,15 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
         />
       )}
       <ApprovalModal pending={state.pending} onDecide={approve} />
+      {pickerOpen && (
+        <WorkspacePicker
+          initialPath={state.workspace}
+          loadDirs={loadDirs}
+          makeDir={makeDir}
+          onConfirm={(cwd) => { newAgent(cwd); setPickerOpen(false) }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   )
 }
