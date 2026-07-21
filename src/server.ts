@@ -160,7 +160,9 @@ export function createServer() {
     }
   })
 
-  const server = app.listen(3001, () => console.log('[server] http on :3001'))
+  // 綁 127.0.0.1(非 0.0.0.0):本機單人工具,/dirs /mkdir /start 等會碰檔案系統與啟動 agent,
+  // 不該對 LAN 開放。WebSocketServer 共用這個 server,一併只聽本機。
+  const server = app.listen(3001, '127.0.0.1', () => console.log('[server] http on 127.0.0.1:3001'))
   const wss = new WebSocketServer({ server })
   wss.on('connection', (ws) => {
     clients.add(ws)
