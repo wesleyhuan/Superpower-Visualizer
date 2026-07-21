@@ -24,7 +24,7 @@ export function WorkspacePicker({ initialPath, loadDirs, makeDir, onConfirm, onC
 
   const go = (path: string) => {
     setError(''); setMkErr('')
-    loadDirs(path).then(setListing).catch(() => { setListing(null); setError('無法讀取此目錄') })
+    loadDirs(path).then(setListing).catch((e) => { console.error('[WorkspacePicker] loadDirs 失敗', e); setListing(null); setError('無法讀取此目錄') })
   }
   useEffect(() => { go(initialPath) }, [initialPath])
 
@@ -33,7 +33,7 @@ export function WorkspacePicker({ initialPath, loadDirs, makeDir, onConfirm, onC
     if (!listing || atDrives || !newName.trim()) return
     makeDir(listing.path, newName.trim())
       .then((path) => { setNewName(''); go(path) })
-      .catch((e) => setMkErr(String(e?.message ?? e)))
+      .catch((e) => { console.error('[WorkspacePicker] makeDir 失敗', e); setMkErr(String(e?.message ?? e)) })
   }
 
   return (
