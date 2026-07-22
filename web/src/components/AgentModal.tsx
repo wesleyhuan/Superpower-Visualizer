@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentEntry } from '../buildAgentBlocks'
-import { buildAnalysisTrace } from '../buildAgentBlocks'
+import { buildAnalysisTrace, classifyKind } from '../buildAgentBlocks'
 import type { TreeNode, AnalysisState, AnalysisResult, AnalysisTrace, Verdict, Severity } from '../wireTypes'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -26,7 +26,6 @@ const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
 )
 const VERDICT_LABEL: Record<Verdict, string> = { ok: '妥當', warn: '有疑慮', bad: '有問題' }
-const VERDICT_CLASS: Record<Verdict, string> = { ok: 'ok', warn: 'warn', bad: 'bad' }
 const SEV_LABEL: Record<Severity, string> = { high: '高', med: '中', low: '低' }
 
 function verdictCount(findings: { severity: Severity }[]): string {
@@ -34,13 +33,6 @@ function verdictCount(findings: { severity: Severity }[]): string {
   const c = { high: 0, med: 0, low: 0 }
   for (const f of findings) c[f.severity]++
   return `${findings.length} 個指摘 · ${c.high} 高 · ${c.med} 中 · ${c.low} 低`
-}
-
-function itemKind(node: TreeNode): { cls: string; text: string } {
-  if (node.type === 'skill') return { cls: 'skill', text: 'SKILL' }
-  if (node.type === 'subagent') return { cls: 'subagent', text: 'SUB' }
-  if (/^mcp__/.test(node.label) || /^mcp__/.test(node.id)) return { cls: 'mcp', text: 'MCP' }
-  return { cls: '', text: 'TOOL' }
 }
 
 // 取結果第一行非空內容當精簡摘要(完整輸出仍在「展開輸出」)。
@@ -54,7 +46,7 @@ function ReasonLine({ text }: { text: string }) {
 }
 
 function WorkItem({ node, output }: { node: TreeNode; output?: string }) {
-  const k = itemKind(node)
+  const k = classifyKind(node)
   const summary = firstLine(output)
   return (
     <div className={`witem ${node.status}`}>
@@ -189,7 +181,7 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
           )}
           {analysis?.status === 'done' && analysis.result && (
             <div className="verdict">
-              <span className={`vbadge ${VERDICT_CLASS[analysis.result.verdict]}`}>{VERDICT_LABEL[analysis.result.verdict]}</span>
+              <span className={`vbadge ${analysis.result.verdict}`}>{VERDICT_LABEL[analysis.result.verdict]}</span>
               <span className="vcount">{verdictCount(analysis.result.findings)}</span>
               <button className="reanalyze" onClick={doAnalyze}>重新分析</button>
             </div>
