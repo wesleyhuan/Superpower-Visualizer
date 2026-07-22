@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { DirListing } from '../wireTypes'
 
 interface Props {
@@ -22,11 +22,12 @@ export function WorkspacePicker({ initialPath, loadDirs, makeDir, onConfirm, onC
   const [newName, setNewName] = useState('')
   const [mkErr, setMkErr] = useState('')
 
-  const go = (path: string) => {
+  // loadDirs 來自 useSession 的 useCallback,參考穩定 → go 也穩定,effect 只在 initialPath 變時跑。
+  const go = useCallback((path: string) => {
     setError(''); setMkErr('')
     loadDirs(path).then(setListing).catch((e) => { console.error('[WorkspacePicker] loadDirs 失敗', e); setListing(null); setError('無法讀取此目錄') })
-  }
-  useEffect(() => { go(initialPath) }, [initialPath])
+  }, [loadDirs])
+  useEffect(() => { go(initialPath) }, [go, initialPath])
 
   const atDrives = !!listing?.drives // 磁碟根視圖:不能建資料夾/確認,需先選磁碟機
   const create = () => {
