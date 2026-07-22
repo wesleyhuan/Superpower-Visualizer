@@ -21,6 +21,14 @@ describe('useSession 目錄 API', () => {
     expect(JSON.parse((call![1] as RequestInit).body as string)).toEqual({ cwd: 'C:/work' })
   })
 
+  it('newAgent() 無 cwd → POST /new-agent {}', () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
+    const { result } = mk(fetchImpl)
+    act(() => result.current.newAgent())
+    const call = fetchImpl.mock.calls.find((c) => c[0] === '/new-agent')
+    expect(JSON.parse((call![1] as RequestInit).body as string)).toEqual({})
+  })
+
   it('loadDirs(path) → GET /dirs?path=… 回 listing', async () => {
     const listing = { path: 'C:/p', parent: 'C:/', entries: ['a'] }
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(listing) })
@@ -28,7 +36,9 @@ describe('useSession 目錄 API', () => {
     let got: any
     await act(async () => { got = await result.current.loadDirs('C:/p') })
     expect(got).toEqual(listing)
-    expect(fetchImpl.mock.calls.some((c) => String(c[0]).startsWith('/dirs?path='))).toBe(true)
+    // 驗完整、且經過 encodeURIComponent 的 URL(C:/p → C%3A%2Fp)
+    const call = fetchImpl.mock.calls.find((c) => String(c[0]).startsWith('/dirs?'))
+    expect(call![0]).toBe(`/dirs?path=${encodeURIComponent('C:/p')}`)
   })
 
   it('makeDir(parent,name) → POST /mkdir 回新路徑', async () => {

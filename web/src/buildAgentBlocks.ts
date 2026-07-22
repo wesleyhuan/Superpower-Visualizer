@@ -84,12 +84,12 @@ export function flattenAgents(main: AgentBlock, mainTitle: string): AgentEntry[]
   return out
 }
 
-// 工具分類:與 AgentModal 的 itemKind 對齊(顯示用標籤)。
-function stepKind(node: TreeNode): string {
-  if (node.type === 'skill') return 'SKILL'
-  if (node.type === 'subagent') return 'SUB'
-  if (/^mcp__/.test(node.label) || /^mcp__/.test(node.id)) return 'MCP'
-  return 'TOOL'
+// 工作項目分類:cls 給樣式、text 給標籤。AgentModal 顯示與 buildAnalysisTrace 共用同一套判斷。
+export function classifyKind(node: TreeNode): { cls: string; text: string } {
+  if (node.type === 'skill') return { cls: 'skill', text: 'SKILL' }
+  if (node.type === 'subagent') return { cls: 'subagent', text: 'SUB' }
+  if (/^mcp__/.test(node.label) || /^mcp__/.test(node.id)) return { cls: 'mcp', text: 'MCP' }
+  return { cls: '', text: 'TOOL' }
 }
 
 const OUTPUT_MAX = 500
@@ -101,7 +101,7 @@ export function buildAnalysisTrace(entry: AgentEntry, outputByNode: Record<strin
     return {
       index: i + 1,
       label: n.label,
-      kind: stepKind(n),
+      kind: classifyKind(n).text,
       status: n.status,
       ...(n.reason ? { reason: n.reason } : {}),
       ...(out ? { output: out.slice(0, OUTPUT_MAX) } : {}),

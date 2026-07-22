@@ -37,20 +37,23 @@ export function buildAnalysisPrompt(trace: AnalysisTrace): string {
 const VERDICTS: Verdict[] = ['ok', 'warn', 'bad']
 const SEVERITIES: Severity[] = ['high', 'med', 'low']
 
+// 解析/查詢失敗時的統一 warn 結果(不拋例外,讓 UI 優雅顯示)。
+const warnResult = (summary: string): AnalysisResult => ({ verdict: 'warn', summary, findings: [] })
+
 // 從模型回覆抽出 JSON 並驗證/夾限成 AnalysisResult。
 // 解析不出來不丟例外,回一個 warn 的說明結果,讓 UI 能優雅顯示。
 export function parseVerdict(text: string): AnalysisResult {
   const json = extractJson(text)
   if (!json) {
     console.error('[analyze] 無法從回覆抽出 JSON,原始文字前 500:', text.slice(0, 500))
-    return { verdict: 'warn', summary: '分析回覆無法解析為 JSON,請重新分析。', findings: [] }
+    return warnResult('分析回覆無法解析為 JSON,請重新分析。')
   }
   let raw: any
   try {
     raw = JSON.parse(json)
   } catch (err) {
     console.error('[analyze] JSON.parse 失敗:', err, '片段:', json.slice(0, 500))
-    return { verdict: 'warn', summary: '分析回覆 JSON 格式錯誤,請重新分析。', findings: [] }
+    return warnResult('分析回覆 JSON 格式錯誤,請重新分析。')
   }
   const verdict: Verdict = VERDICTS.includes(raw?.verdict) ? raw.verdict : 'warn'
   const summary = typeof raw?.summary === 'string' && raw.summary.trim() ? raw.summary : '(模型未提供總評)'
@@ -87,6 +90,6 @@ export async function runAnalysis(trace: AnalysisTrace, queryImpl: AnalyzeQuery)
   } catch (err) {
     console.error('[analyze] 審查 query 失敗:', err)
     const msg = err instanceof Error ? err.message : String(err)
-    return { verdict: 'warn', summary: `分析失敗:${msg}`, findings: [] }
+    return warnResult(`分析失敗:${msg}`)
   }
 }

@@ -81,6 +81,7 @@ export function useSession(deps: SessionDeps = {}) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ trace }),
       })
+      if (!res.ok) throw new Error(`分析請求失敗:${res.status}`)
       return await res.json()
     } catch (err) {
       console.error('[analyze] 請求失敗', err)
