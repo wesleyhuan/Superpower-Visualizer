@@ -6,6 +6,7 @@ import { SourceController } from './sourceController'
 import { ReActAssembler } from './reactAssembler'
 import { makeObserveSource, workspaceFor, listObservableSessions } from './sourceSystems'
 import { listDirs, makeDir } from './dirs'
+import { isLocalHost, isAllowedOrigin, isObservableFile } from './security'
 import type { SourceSystem } from './sourceSystems'
 import { translate } from './translator'
 import { realRunQuery, resolveWorkspace } from './agentAdapter'
@@ -53,6 +54,15 @@ export function createServer() {
   // 放寬 body 上限:大型 agent 的 ReAct trace(如 186 步)JSON 可能超過預設 100KB,
   // 否則 /analyze 會回 413 → 前端 res.json() 失敗 → 靜默退成一般「分析失敗」。
   app.use(express.json({ limit: '5mb' }))
+  // 反 DNS rebinding:只服務本機 Host。attacker.com 就算解析到 127.0.0.1,
+  // 瀏覽器仍送 Host: attacker.com → 擋掉(否則可繞過 127.0.0.1 綁定打所有路由)。
+  app.use((req, res, next) => {
+    if (!isLocalHost(req.headers.host)) {
+      console.error('[server] 拒絕非本機 Host:', req.headers.host)
+      return res.status(403).json({ error: 'forbidden host' })
+    }
+    next()
+  })
   const store = new SnapshotStore()
   const mgr = new SessionManager({ runQuery: realRunQuery })
   const clients = new Set<WebSocket>()
@@ -91,6 +101,11 @@ export function createServer() {
     const file = String(req.body?.file ?? '')
     if (!file) return res.status(400).json({ ok: false, error: 'missing file' })
     const system = asSystem(req.body?.system)
+    // 只允許觀察白名單根目錄內的檔(防任意檔讀 / 路徑穿越)。
+    if (!isObservableFile(system, file)) {
+      console.error('[server] /observe 拒絕越界路徑:', file)
+      return res.status(400).json({ ok: false, error: 'file not in allowed directory' })
+    }
     controller.observe(file, (f, emit) => makeObserveSource(system, f, emit), (f) => workspaceFor(system, f))
     res.json({ ok: true })
   })
@@ -163,7 +178,16 @@ export function createServer() {
   // 綁 127.0.0.1(非 0.0.0.0):本機單人工具,/dirs /mkdir /start 等會碰檔案系統與啟動 agent,
   // 不該對 LAN 開放。WebSocketServer 共用這個 server,一併只聽本機。
   const server = app.listen(3001, '127.0.0.1', () => console.log('[server] http on 127.0.0.1:3001'))
-  const wss = new WebSocketServer({ server })
+  // WS 檢查 Origin:擋掉使用者造訪的惡意網頁背景連上來被動收取 agent 串流
+  // (也擋 rebinding:其 Origin 會是 attacker.com)。非瀏覽器客戶端不送 Origin → 放行。
+  const wss = new WebSocketServer({
+    server,
+    verifyClient: (info: { origin?: string }) => {
+      const ok = isAllowedOrigin(info.origin)
+      if (!ok) console.error('[server] 拒絕 WS 來源:', info.origin)
+      return ok
+    },
+  })
   wss.on('connection', (ws) => {
     clients.add(ws)
     ws.send(JSON.stringify(controller.snapshot()))
