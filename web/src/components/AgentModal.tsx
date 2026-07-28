@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentEntry } from '../buildAgentBlocks'
 import { buildAnalysisTrace, classifyKind } from '../buildAgentBlocks'
+import { buildAnalysisRecord, downloadJson } from '../buildAnalysisRecord'
 import type { TreeNode, AnalysisState, AnalysisResult, AnalysisTrace, Verdict, Severity } from '../wireTypes'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -140,6 +141,14 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
   const canAnalyze = cur.items.length > 0
   const doAnalyze = () => onAnalyze(cur.key, buildAnalysisTrace(cur, outputByNode))
 
+  // 匯出這次審核為評估記錄(trace + result + 出處),供其他模型重跑/裁判。
+  const doExport = (result: AnalysisResult) => {
+    const record = buildAnalysisRecord(buildAnalysisTrace(cur, outputByNode), result)
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const safeKey = cur.key.replace(/[^\w.-]/g, '_')
+    downloadJson(`analysis-${safeKey}-${stamp}.json`, record)
+  }
+
   const scrollToStep = (step: number) => {
     const el = bodyRef.current?.querySelector(`[data-step="${step}"]`)
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -183,6 +192,7 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
             <div className="verdict">
               <span className={`vbadge ${analysis.result.verdict}`}>{VERDICT_LABEL[analysis.result.verdict]}</span>
               <span className="vcount">{verdictCount(analysis.result.findings)}</span>
+              <button className="reanalyze" onClick={() => doExport(analysis.result!)}>匯出 JSON</button>
               <button className="reanalyze" onClick={doAnalyze}>重新分析</button>
             </div>
           )}
