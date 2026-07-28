@@ -65,4 +65,6 @@ export interface AnalysisResult {
   verdict: Verdict
   summary: string
   findings: Finding[]
+  reviewerModel?: string   // 產出這份審核的模型(供匯出後給其他模型裁判);後端沿用 CLI 模型故動態帶回
+  promptVersion?: string   // 審核 prompt 版本,prompt 改了就 bump,方便評估重現
 }

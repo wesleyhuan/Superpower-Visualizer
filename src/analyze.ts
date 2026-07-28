@@ -4,6 +4,9 @@ import type { AnalysisTrace, AnalysisResult, Verdict, Severity, Finding } from '
 // (見 sessions.ts):prompt 與過濾共用同一字串,避免日後改字走鐘。
 export const ANALYSIS_PROMPT_OPENING = '你是一位資深工程師,正在審查「另一個 AI agent」完成任務的過程是否合理。'
 
+// 審核 prompt 的版本。改動 buildAnalysisPrompt 的內容/schema 時 bump,匯出的評估記錄可據此重現。
+export const ANALYSIS_PROMPT_VERSION = 'v1'
+
 // 把一個 agent 的 ReAct 軌跡組成給「審查用 Claude」的 prompt。
 // 要求:只回 JSON、schema 固定、語言繁中。
 export function buildAnalysisPrompt(trace: AnalysisTrace): string {
@@ -78,18 +81,21 @@ function extractJson(text: string): string | null {
   return text.slice(start, end + 1)
 }
 
-export type AnalyzeQuery = (prompt: string) => Promise<string>
+// 審查 query 回傳純文字,並(若拿得到)附上實際使用的模型 id。
+export type AnalyzeQuery = (prompt: string) => Promise<{ text: string; model?: string }>
 
 // 組 prompt → 呼叫審查 query → 解析;任何失敗都回 warn fallback(不拋出)。
+// 結果一律帶 promptVersion,拿得到模型時附 reviewerModel,供匯出評估記錄。
 export async function runAnalysis(trace: AnalysisTrace, queryImpl: AnalyzeQuery): Promise<AnalysisResult> {
   const prompt = buildAnalysisPrompt(trace)
+  const meta = { promptVersion: ANALYSIS_PROMPT_VERSION }
   try {
-    const text = await queryImpl(prompt)
-    console.log('[analyze] 收到審查回覆,長度', text.length)
-    return parseVerdict(text)
+    const { text, model } = await queryImpl(prompt)
+    console.log('[analyze] 收到審查回覆,長度', text.length, '模型', model ?? '(未知)')
+    return { ...parseVerdict(text), ...meta, ...(model ? { reviewerModel: model } : {}) }
   } catch (err) {
     console.error('[analyze] 審查 query 失敗:', err)
     const msg = err instanceof Error ? err.message : String(err)
-    return warnResult(`分析失敗:${msg}`)
+    return { ...warnResult(`分析失敗:${msg}`), ...meta }
   }
 }

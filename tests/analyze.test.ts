@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAnalysisPrompt, parseVerdict, runAnalysis } from '../src/analyze'
+import { buildAnalysisPrompt, parseVerdict, runAnalysis, ANALYSIS_PROMPT_VERSION } from '../src/analyze'
 import type { AnalysisTrace } from '../src/types'
 
 const trace: AnalysisTrace = {
@@ -60,16 +60,28 @@ describe('parseVerdict', () => {
 })
 
 describe('runAnalysis', () => {
-  it('注入回 JSON 的假 query → 得對應結果', async () => {
-    const fake = async () => '{"verdict":"ok","summary":"good","findings":[]}'
+  it('注入回 JSON 的假 query → 得對應結果,並帶上 promptVersion', async () => {
+    const fake = async () => ({ text: '{"verdict":"ok","summary":"good","findings":[]}' })
     const r = await runAnalysis(trace, fake)
     expect(r.verdict).toBe('ok')
     expect(r.summary).toBe('good')
+    expect(r.promptVersion).toBe(ANALYSIS_PROMPT_VERSION)
   })
-  it('query 丟例外 → warn fallback,且不拋出', async () => {
+  it('query 回傳 model → 結果帶 reviewerModel(供其他模型裁判)', async () => {
+    const fake = async () => ({ text: '{"verdict":"ok","summary":"g","findings":[]}', model: 'claude-opus-4-8' })
+    const r = await runAnalysis(trace, fake)
+    expect(r.reviewerModel).toBe('claude-opus-4-8')
+  })
+  it('query 沒給 model → 不含 reviewerModel', async () => {
+    const fake = async () => ({ text: '{"verdict":"ok","summary":"g","findings":[]}' })
+    const r = await runAnalysis(trace, fake)
+    expect(r.reviewerModel).toBeUndefined()
+  })
+  it('query 丟例外 → warn fallback,不拋出,仍帶 promptVersion', async () => {
     const boom = async () => { throw new Error('SDK 掛了') }
     const r = await runAnalysis(trace, boom)
     expect(r.verdict).toBe('warn')
     expect(r.summary).toContain('SDK 掛了')
+    expect(r.promptVersion).toBe(ANALYSIS_PROMPT_VERSION)
   })
 })

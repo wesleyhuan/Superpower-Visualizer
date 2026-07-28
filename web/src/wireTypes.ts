@@ -89,6 +89,8 @@ export interface AnalysisResult {
   verdict: Verdict
   summary: string
   findings: Finding[]
+  reviewerModel?: string   // 產出審核的模型(後端動態帶回);匯出記錄用
+  promptVersion?: string   // 審核 prompt 版本;匯出記錄用
 }
 // 前端 UI 狀態(每個 agent key 一份;放這裡供 App 與 AgentModal 共用,避免循環 import)。
 export interface AnalysisState {
