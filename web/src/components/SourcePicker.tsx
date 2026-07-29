@@ -30,6 +30,17 @@ function metaOf(s: SessionInfo): string {
   return prefix + t + (s.subagents > 0 ? ` · ${s.subagents} subagent` : '')
 }
 
+// 依後端 trivial 旗標把清單拆成正常組與瑣碎組(僅 Claude 有 trivial;其餘皆入 normal)。
+export function splitSessions(list: SessionInfo[]): { normal: SessionInfo[]; trivial: SessionInfo[] } {
+  const normal: SessionInfo[] = []
+  const trivial: SessionInfo[] = []
+  for (const s of list) {
+    if (s.system === 'claude' && s.trivial) trivial.push(s)
+    else normal.push(s)
+  }
+  return { normal, trivial }
+}
+
 interface Props {
   mode: Mode
   onObserve: (system: SourceSystem, file: string) => void

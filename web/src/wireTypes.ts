@@ -48,6 +48,7 @@ export interface ClaudeSessionInfo {
   title: string   // 該對話第一句 user 訊息(可能為空 → 回退顯示 slug)
   mtime: number
   subagents: number
+  trivial: boolean   // 後端判定的瑣碎旗標;前端預設收起
 }
 export interface AntigravitySessionInfo {
   system: 'antigravity'
