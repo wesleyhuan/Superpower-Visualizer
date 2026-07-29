@@ -123,3 +123,14 @@ function countSubagents(subDir: string): number {
     return 0
   }
 }
+
+// 瑣碎判定門檻:記錄行數低於此值才可能算瑣碎(安全網,續作會超過)。
+export const LINE_THRESHOLD = 40
+
+// 依訊號判定 session 是否「瑣碎」:開頭是純 slash 指令,且之後沒對專案做任何事。
+// 四條同時成立才算瑣碎;任一不成立(有改檔 / 有 subagent / 行數多 / 非指令開頭)即保留。
+export function classifyTrivial(sig: {
+  isCommand: boolean; subagents: number; hasMutation: boolean; lines: number
+}): boolean {
+  return sig.isCommand && sig.subagents === 0 && !sig.hasMutation && sig.lines < LINE_THRESHOLD
+}

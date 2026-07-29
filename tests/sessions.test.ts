@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listSessions, firstMeta } from '../src/sessions'
+import { listSessions, firstMeta, classifyTrivial, LINE_THRESHOLD } from '../src/sessions'
 import { ANALYSIS_PROMPT_OPENING } from '../src/analyze'
 
 const jsonl = (recs: any[]) => recs.map((r) => JSON.stringify(r)).join('\n') + '\n'
@@ -110,5 +110,24 @@ describe('firstMeta', () => {
   it('抽不到 user 文字時 title 為空字串', () => {
     const f = writeSession([{ type: 'system', cwd: 'x' }])
     expect(firstMeta(f)).toEqual({ cwd: 'x', title: '' })
+  })
+})
+
+describe('classifyTrivial', () => {
+  const base = { isCommand: true, subagents: 0, hasMutation: false, lines: 14 }
+  it('指令開頭 + 無 subagent + 無改檔 + 少行 → true', () => {
+    expect(classifyTrivial(base)).toBe(true)
+  })
+  it('非指令開頭(真實任務)→ false', () => {
+    expect(classifyTrivial({ ...base, isCommand: false })).toBe(false)
+  })
+  it('有改檔工具(/init 後有改專案)→ false', () => {
+    expect(classifyTrivial({ ...base, hasMutation: true })).toBe(false)
+  })
+  it('行數達門檻(大量續作)→ false', () => {
+    expect(classifyTrivial({ ...base, lines: LINE_THRESHOLD })).toBe(false)
+  })
+  it('有 subagent → false', () => {
+    expect(classifyTrivial({ ...base, subagents: 2 })).toBe(false)
   })
 })
