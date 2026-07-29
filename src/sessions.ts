@@ -10,6 +10,7 @@ export interface SessionInfo {
   title: string     // 該對話的第一句 user 訊息(清掉指令標籤);抽不到為空字串
   mtime: number     // 最後修改時間(ms)
   subagents: number // subagents/ 內的子檔數
+  trivial: boolean  // 開頭是純指令且沒對專案做任何事 → 前端預設收起
 }
 
 // 列出 ~/.claude/projects 下所有「可觀察」的 session 主檔(排除 subagents/ 內的子檔),
@@ -45,13 +46,20 @@ export function listSessions(root = join(homedir(), '.claude', 'projects')): Ses
         const meta = firstMeta(file)
         // 略過 /analyze 一次性 query 自己產生的審查逐字稿(第一句就是審查 prompt)。
         if (meta.title.startsWith(ANALYSIS_PROMPT_OPENING)) continue
+        const subagents = countSubagents(join(dir, name.slice(0, -'.jsonl'.length), 'subagents'))
+        // 只有「指令開頭 + 無 subagent」的候選才掃內容;其餘直接非瑣碎、不掃。
+        const { hasMutation, lines } = meta.isCommand && subagents === 0
+          ? scanActivity(file)
+          : { hasMutation: false, lines: LINE_THRESHOLD }
+        const trivial = classifyTrivial({ isCommand: meta.isCommand, subagents, hasMutation, lines })
         out.push({
           file,
           project,
           cwd: meta.cwd,
           title: meta.title,
           mtime: st.mtimeMs,
-          subagents: countSubagents(join(dir, name.slice(0, -'.jsonl'.length), 'subagents')),
+          subagents,
+          trivial,
         })
       } catch (err) {
         console.error(`[sessions] 略過 ${file}:`, err)

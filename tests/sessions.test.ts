@@ -74,6 +74,39 @@ describe('listSessions', () => {
     const list = listSessions(root)
     expect(list.map((s) => s.title)).toEqual(['幫我修 bug'])
   })
+
+  it('bare /model → trivial:true;真實任務 → false', () => {
+    const proj = join(root, 'p')
+    mkdirSync(proj, { recursive: true })
+    writeFileSync(join(proj, 'model.jsonl'), jsonl([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: '<command-name>/model</command-name>' } },
+    ]))
+    writeFileSync(join(proj, 'task.jsonl'), jsonl([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: '幫我讀 src 並總結' } },
+    ]))
+    const byTitle = Object.fromEntries(listSessions(root).map((s) => [s.title, s.trivial]))
+    expect(byTitle['/model']).toBe(true)
+    expect(byTitle['幫我讀 src 並總結']).toBe(false)
+  })
+
+  it('/init 後有改檔(Write)→ trivial:false', () => {
+    const proj = join(root, 'p')
+    mkdirSync(proj, { recursive: true })
+    writeFileSync(join(proj, 'init.jsonl'), jsonl([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: '<command-name>/init</command-name>' } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write', input: {} }] } },
+    ]))
+    expect(listSessions(root)[0].trivial).toBe(false)
+  })
+
+  it('指令開頭但行數 >= 門檻 → trivial:false', () => {
+    const proj = join(root, 'p')
+    mkdirSync(proj, { recursive: true })
+    const recs = [{ type: 'user', cwd: 'x', message: { role: 'user', content: '<command-name>/init</command-name>' } }]
+    for (let i = 0; i < LINE_THRESHOLD; i++) recs.push({ type: 'assistant', message: { content: [{ type: 'text', text: String(i) }] } } as any)
+    writeFileSync(join(proj, 'big.jsonl'), jsonl(recs))
+    expect(listSessions(root)[0].trivial).toBe(false)
+  })
 })
 
 describe('firstMeta', () => {
