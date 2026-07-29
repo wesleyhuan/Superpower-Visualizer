@@ -1,4 +1,4 @@
-import { existsSync, statSync, readdirSync, openSync, readSync, closeSync } from 'node:fs'
+import { existsSync, statSync, readdirSync, openSync, readSync, closeSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { ANALYSIS_PROMPT_OPENING } from './analyze'
@@ -63,8 +63,8 @@ export function listSessions(root = join(homedir(), '.claude', 'projects')): Ses
 
 // 只讀檔頭(前 256KB)一次撈出 cwd 與「第一句 user 訊息」當標題。
 // cwd 與第一句通常都在檔頭幾筆;限量讀避免掃描 6MB 大檔。兩者都拿到就提早結束。
-export function firstMeta(file: string): { cwd: string; title: string } {
-  let cwd = '', title = ''
+export function firstMeta(file: string): { cwd: string; title: string; isCommand: boolean } {
+  let cwd = '', title = '', isCommand = false
   let fd: number | undefined
   try {
     fd = openSync(file, 'r')
@@ -80,8 +80,8 @@ export function firstMeta(file: string): { cwd: string; title: string } {
       }
       if (!cwd && typeof rec?.cwd === 'string') cwd = rec.cwd
       if (!title && rec?.type === 'user') {
-        const t = cleanTitle(userText(rec?.message?.content))
-        if (t) title = t
+        const c = cleanTitle(userText(rec?.message?.content))
+        if (c.title) { title = c.title; isCommand = c.isCommand }
       }
       if (cwd && title) break
     }
@@ -90,7 +90,7 @@ export function firstMeta(file: string): { cwd: string; title: string } {
   } finally {
     if (fd !== undefined) closeSync(fd)
   }
-  return { cwd, title }
+  return { cwd, title, isCommand }
 }
 
 // 相容既有呼叫端(transcriptSource 只要 cwd)。
@@ -109,10 +109,10 @@ function userText(content: unknown): string {
 
 // 清成可讀標題:slash 指令取 <command-name>(顯示成 /init);
 // 其餘去掉 XML 式標籤、壓成單行、截斷 80 字。
-function cleanTitle(raw: string): string {
+function cleanTitle(raw: string): { title: string; isCommand: boolean } {
   const cmd = raw.match(/<command-name>([^<]+)<\/command-name>/)
-  if (cmd) return cmd[1].trim()
-  return raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
+  if (cmd) return { title: cmd[1].trim(), isCommand: true }
+  return { title: raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80), isCommand: false }
 }
 
 function countSubagents(subDir: string): number {
@@ -133,4 +133,31 @@ export function classifyTrivial(sig: {
   isCommand: boolean; subagents: number; hasMutation: boolean; lines: number
 }): boolean {
   return sig.isCommand && sig.subagents === 0 && !sig.hasMutation && sig.lines < LINE_THRESHOLD
+}
+
+const MUTATION_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
+
+// 有界掃描候選檔:數非空記錄行(達 limit 即停),並偵測是否用過改檔工具的 tool_use。
+// 讀檔或解析失敗印出實際 error,保守回 lines=limit(視為非瑣碎,寧可少摺)。
+export function scanActivity(file: string, limit = LINE_THRESHOLD): { hasMutation: boolean; lines: number } {
+  let lines = 0, hasMutation = false
+  try {
+    const text = readFileSync(file, 'utf8')
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue
+      if (++lines >= limit) { lines = limit; break }
+      let rec: any
+      try { rec = JSON.parse(line) } catch { continue }
+      if (rec?.type === 'assistant') {
+        for (const b of rec.message?.content ?? []) {
+          if (b?.type === 'tool_use' && MUTATION_TOOLS.has(b?.name)) { hasMutation = true; break }
+        }
+        if (hasMutation) break
+      }
+    }
+  } catch (err) {
+    console.error(`[sessions] scanActivity 讀檔失敗 ${file}:`, err)
+    return { hasMutation: false, lines: limit }
+  }
+  return { hasMutation, lines }
 }

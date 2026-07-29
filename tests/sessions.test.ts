@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listSessions, firstMeta, classifyTrivial, LINE_THRESHOLD } from '../src/sessions'
+import { listSessions, firstMeta, classifyTrivial, scanActivity, LINE_THRESHOLD } from '../src/sessions'
 import { ANALYSIS_PROMPT_OPENING } from '../src/analyze'
 
 const jsonl = (recs: any[]) => recs.map((r) => JSON.stringify(r)).join('\n') + '\n'
@@ -82,7 +82,7 @@ describe('firstMeta', () => {
       { type: 'system', cwd: 'C:/proj' },
       { type: 'user', message: { role: 'user', content: '幫我重構登入流程' } },
     ])
-    expect(firstMeta(f)).toEqual({ cwd: 'C:/proj', title: '幫我重構登入流程' })
+    expect(firstMeta(f)).toEqual({ cwd: 'C:/proj', title: '幫我重構登入流程', isCommand: false })
   })
 
   it('content 為區塊陣列時串接 text 區塊', () => {
@@ -109,7 +109,20 @@ describe('firstMeta', () => {
 
   it('抽不到 user 文字時 title 為空字串', () => {
     const f = writeSession([{ type: 'system', cwd: 'x' }])
-    expect(firstMeta(f)).toEqual({ cwd: 'x', title: '' })
+    expect(firstMeta(f)).toEqual({ cwd: 'x', title: '', isCommand: false })
+  })
+
+  it('slash 指令 → isCommand 為 true', () => {
+    const f = writeSession([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: '<command-name>/model</command-name>' } },
+    ])
+    expect(firstMeta(f).isCommand).toBe(true)
+  })
+  it('自然語言 → isCommand 為 false', () => {
+    const f = writeSession([
+      { type: 'user', cwd: 'x', message: { role: 'user', content: '幫我修 bug' } },
+    ])
+    expect(firstMeta(f).isCommand).toBe(false)
   })
 })
 
@@ -129,5 +142,27 @@ describe('classifyTrivial', () => {
   })
   it('有 subagent → false', () => {
     expect(classifyTrivial({ ...base, subagents: 2 })).toBe(false)
+  })
+})
+
+describe('scanActivity', () => {
+  it('無改檔工具、行數少 → hasMutation false、lines 為記錄數', () => {
+    const f = writeSession([
+      { type: 'user', cwd: 'x', message: { content: '<command-name>/model</command-name>' } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }] } },
+    ])
+    expect(scanActivity(f)).toEqual({ hasMutation: false, lines: 2 })
+  })
+  it('出現 Write 的 tool_use → hasMutation true', () => {
+    const f = writeSession([
+      { type: 'user', cwd: 'x', message: { content: '<command-name>/init</command-name>' } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write', input: {} }] } },
+    ])
+    expect(scanActivity(f).hasMutation).toBe(true)
+  })
+  it('行數達上限即停,lines 夾在 limit', () => {
+    const recs = Array.from({ length: 60 }, (_, i) => ({ type: 'user', message: { content: String(i) } }))
+    const f = writeSession(recs)
+    expect(scanActivity(f, 40).lines).toBe(40)
   })
 })
