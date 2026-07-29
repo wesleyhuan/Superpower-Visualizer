@@ -54,6 +54,7 @@ export function SourcePicker({ mode, onObserve, onNewAgent, loadSessions }: Prop
   const [view, setView] = useState<'root' | SourceSystem>('root')
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [loading, setLoading] = useState(false)
+  const [showTrivial, setShowTrivial] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -69,10 +70,18 @@ export function SourcePicker({ mode, onObserve, onNewAgent, loadSessions }: Prop
     setView(system)
     setLoading(true)
     setSessions([])
+    setShowTrivial(false)
     void loadSessions(system).then((list) => { setSessions(list); setLoading(false) })
   }
 
   const label = mode === 'observe' ? '觀察中(唯讀)' : '操控模式'
+
+  const renderItem = (s: SessionInfo) => (
+    <button key={s.file} className="source-item" onClick={() => { onObserve(s.system, s.file); setOpen(false) }} title={s.cwd || s.file}>
+      <span className="si-title">{titleOf(s)}</span>
+      <span className="si-meta">{metaOf(s)}</span>
+    </button>
+  )
 
   return (
     <div className="source-picker" ref={ref}>
@@ -110,12 +119,23 @@ export function SourcePicker({ mode, onObserve, onNewAgent, loadSessions }: Prop
             ? <div className="source-empty">載入中…</div>
             : sessions.length === 0
               ? <div className="source-empty">找不到可觀察的 session</div>
-              : sessions.map((s) => (
-                <button key={s.file} className="source-item" onClick={() => { onObserve(s.system, s.file); setOpen(false) }} title={s.cwd || s.file}>
-                  <span className="si-title">{titleOf(s)}</span>
-                  <span className="si-meta">{metaOf(s)}</span>
-                </button>
-              ))}
+              : (() => {
+                  const { normal, trivial } = splitSessions(sessions)
+                  return (
+                    <>
+                      {normal.map(renderItem)}
+                      {trivial.length > 0 && (
+                        <>
+                          <button className="source-item trivial-toggle" onClick={() => setShowTrivial((v) => !v)}>
+                            <span className="si-plus">{showTrivial ? '▾' : '▸'}</span>
+                            <span>{showTrivial ? '收起' : '顯示'}瑣碎 session ({trivial.length})</span>
+                          </button>
+                          {showTrivial && trivial.map(renderItem)}
+                        </>
+                      )}
+                    </>
+                  )
+                })()}
         </div>
       )}
     </div>
