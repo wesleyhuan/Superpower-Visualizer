@@ -1,4 +1,4 @@
-import { existsSync, statSync, readdirSync, openSync, readSync, closeSync, readFileSync } from 'node:fs'
+import { existsSync, statSync, readdirSync, openSync, readSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { ANALYSIS_PROMPT_OPENING } from './analyze'
@@ -145,13 +145,16 @@ export function classifyTrivial(sig: {
 
 const MUTATION_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
-// 有界掃描候選檔:數非空記錄行(達 limit 即停),並偵測是否用過改檔工具的 tool_use。
-// 讀檔或解析失敗印出實際 error,保守回 lines=limit(視為非瑣碎,寧可少摺)。
+// 有界掃描候選檔:只讀檔頭(前 256KB,同 firstMeta),數非空記錄行(達 limit 即停),
+// 並偵測是否用過改檔工具的 tool_use。讀檔或解析失敗印出實際 error,保守回 lines=limit(視為非瑣碎,寧可少摺)。
 export function scanActivity(file: string, limit = LINE_THRESHOLD): { hasMutation: boolean; lines: number } {
   let lines = 0, hasMutation = false
+  let fd: number | undefined
   try {
-    const text = readFileSync(file, 'utf8')
-    for (const line of text.split('\n')) {
+    fd = openSync(file, 'r')
+    const buf = Buffer.alloc(262144)
+    const n = readSync(fd, buf, 0, buf.length, 0)
+    for (const line of buf.toString('utf8', 0, n).split('\n')) {
       if (!line.trim()) continue
       if (++lines >= limit) { lines = limit; break }
       let rec: any
@@ -166,6 +169,8 @@ export function scanActivity(file: string, limit = LINE_THRESHOLD): { hasMutatio
   } catch (err) {
     console.error(`[sessions] scanActivity 讀檔失敗 ${file}:`, err)
     return { hasMutation: false, lines: limit }
+  } finally {
+    if (fd !== undefined) closeSync(fd)
   }
   return { hasMutation, lines }
 }
