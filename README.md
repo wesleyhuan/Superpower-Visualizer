@@ -130,6 +130,13 @@ is unchanged.)
    time shows "just now".
 6. Pick "＋ New Agent (control)" to return to control mode (the view clears, ready for a new task).
 
+> **Trivial sessions are auto-collapsed**: a session that starts with a bare slash command (e.g.
+> `/model`, an empty `/init`) and did **no project work** — no mutating tool (Write/Edit…), no
+> subagents, few records — is flagged "trivial" and folded into a default-collapsed **"顯示瑣碎
+> session (N)"** toggle at the bottom of the list; click to reveal them. Nothing is deleted, and an
+> `/init` that led to real edits is **never** mis-folded (only "bare-command + no subagent"
+> candidates get a bounded 256KB scan, so the check is near-zero cost).
+
 > **Antigravity's reason**: each tool step carries both `toolAction` (the *why*) and `toolSummary`
 > (the *what*), which feed the "💡 Thought" and "🔧 Action" lines respectively. Antigravity usually
 > bundles the thought and the action into the same step, so no tools are lost. The transcript is
@@ -175,8 +182,8 @@ the chat).
 ## Tests
 
 ```bash
-npm test            # backend unit tests (vitest, 66)
-cd web && npm test  # frontend unit tests (vitest + jsdom, 33)
+npm test            # backend unit tests (vitest, 121)
+cd web && npm test  # frontend unit tests (vitest + jsdom, 65)
 ```
 
 Type-check: `npx tsc --noEmit` (in the root and `web/` separately).

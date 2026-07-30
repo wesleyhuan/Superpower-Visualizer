@@ -108,6 +108,11 @@ Windows 磁碟根,還能當場建立空資料夾,按「**使用這個目錄**」
 5. 要看**你自己當下這個 Claude session**,選 Claude 清單最上面、時間顯示「剛剛」的那筆即可。
 6. 選「＋ 新 Agent(操控)」回到操控模式(畫面清空、可重新下任務)。
 
+> **瑣碎 session 自動收合**:開頭是純 slash 指令(如 `/model`、空 `/init`)且**沒對專案做任何事**
+> ——無改檔工具(Write/Edit…)、無 subagent、記錄少——的 session 會被判為「瑣碎」,預設收進清單底部的
+> **「顯示瑣碎 session (N)」** toggle,點開才顯示。**不刪除**,也**不會誤收** `/init` 後有實質修改的 session
+> (只對「純指令開頭 + 無 subagent」的候選做 256KB 有界掃描,判定成本近乎零)。
+
 > **Antigravity 的 reason**:每個工具步驟自帶 `toolAction`(為什麼)與 `toolSummary`(做什麼),
 > 分別進「💡 想法」與「🔧 動作」。Antigravity 常把思考與動作放同一步,所以工具不會漏。
 > 逐字稿是 protobuf,v1 用泛型萃取(不需 `.proto`),模型的長篇 thinking 暫不顯示(避免混入檔案內容)。
@@ -140,8 +145,8 @@ Claude**(獨立的審查 session,不會動到正在觀察/操控的 agent)。它
 ## 測試
 
 ```bash
-npm test            # 後端單元測試 (vitest, 66)
-cd web && npm test  # 前端單元測試 (vitest + jsdom, 33)
+npm test            # 後端單元測試 (vitest, 121)
+cd web && npm test  # 前端單元測試 (vitest + jsdom, 65)
 ```
 
 型別檢查:`npx tsc --noEmit`(根與 `web/` 各自)。
