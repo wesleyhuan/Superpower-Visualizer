@@ -10,22 +10,29 @@ function relTime(ms: number): string {
   return `${Math.floor(h / 24)} 天前`
 }
 
-// slug 形如 C--Users-<user>-Desktop-proj-chess → proj/chess
-function shortProject(p: string): string {
-  return p.replace(/^C--Users-[^-]+-Desktop-/, '').replace(/^C--Users-[^-]+-/, '').replace(/-/g, '/')
+// 專案顯示名。有真實路徑(cwd)就取最後一段資料夾名——跨 OS / 磁碟都正確;
+// 抽不到 cwd 才反解 Claude Code 的 slug(C--Users-<user>-Desktop-proj → proj/chess):
+// 去磁碟(C--)、根(-)、家目錄(Users/home 的 <user>[/Desktop])前綴,再把 - 還原成 /。
+export function shortProject(p: string, cwd?: string): string {
+  if (cwd) return cwd.split(/[\\/]/).filter(Boolean).pop() || p
+  return p
+    .replace(/^[A-Za-z]--/, '')
+    .replace(/^-+/, '')
+    .replace(/^(Users|home)-[^-]+-(Desktop-)?/, '')
+    .replace(/-/g, '/')
 }
 
 // 每筆 session 的標題 / 副標,依系統不同。
 function titleOf(s: SessionInfo): string {
   if (s.system === 'antigravity') return s.identity || s.file.split(/[\\/]/).pop() || s.file
-  // Claude:優先用該對話第一句;抽不到才回退專案 slug。
-  return s.title || shortProject(s.project)
+  // Claude:優先用該對話第一句;抽不到才回退專案名。
+  return s.title || shortProject(s.project, s.cwd)
 }
 function metaOf(s: SessionInfo): string {
   const t = relTime(s.mtime)
   if (s.system === 'antigravity') return `${t} · ${s.steps} 步`
-  // slug 降為副標;但標題已回退成 slug 時就不重複顯示。
-  const slug = shortProject(s.project)
+  // 專案名降為副標;但標題已回退成專案名時就不重複顯示。
+  const slug = shortProject(s.project, s.cwd)
   const prefix = s.title && s.title !== slug ? `${slug} · ` : ''
   return prefix + t + (s.subagents > 0 ? ` · ${s.subagents} subagent` : '')
 }

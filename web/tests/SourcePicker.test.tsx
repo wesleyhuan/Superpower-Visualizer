@@ -1,12 +1,30 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { splitSessions, SourcePicker } from '../src/components/SourcePicker'
+import { splitSessions, shortProject, SourcePicker } from '../src/components/SourcePicker'
 import type { SessionInfo } from '../src/wireTypes'
 
 const claude = (title: string, trivial: boolean): SessionInfo =>
   ({ system: 'claude', file: title, project: 'p', cwd: 'x', title, mtime: 0, subagents: 0, trivial })
 const anti = (identity: string): SessionInfo =>
   ({ system: 'antigravity', file: identity, identity, cwd: 'x', mtime: 0, steps: 1 })
+
+describe('shortProject', () => {
+  it('有 cwd 時取真實路徑最後一段(Windows)', () => {
+    expect(shortProject('C--Users-wesle-Desktop-proj-chess', 'C:\\Users\\wesle\\Desktop\\proj-chess')).toBe('proj-chess')
+  })
+  it('有 cwd 時取真實路徑最後一段(Unix,含結尾斜線)', () => {
+    expect(shortProject('-Users-alice-proj', '/Users/alice/proj/')).toBe('proj')
+  })
+  it('無 cwd:C 槽 Desktop slug 去前綴', () => {
+    expect(shortProject('C--Users-wesle-Desktop-proj-chess')).toBe('proj/chess')
+  })
+  it('無 cwd:D 槽 slug 不留雙斜線', () => {
+    expect(shortProject('D--proj-app')).toBe('proj/app')
+  })
+  it('無 cwd:Mac slug 去家目錄前綴', () => {
+    expect(shortProject('-Users-alice-proj')).toBe('proj')
+  })
+})
 
 describe('splitSessions', () => {
   it('依 trivial 拆成 normal / trivial', () => {

@@ -86,7 +86,7 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
   it('來源下拉:先選 Claude → 載入 sessions → 點某個 → POST /observe;點新 Agent → POST /new-agent', async () => {
     fetchImpl = vi.fn((path: string) => {
       if (path.startsWith('/sessions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
-        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/proj', mtime: Date.now(), subagents: 3, trivial: false },
+        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/Users/me/Desktop/proj-chess', mtime: Date.now(), subagents: 3, trivial: false },
       ] }) })
       if (path.startsWith('/dirs')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ path: 'C:/here', parent: 'C:/', entries: [] }) })
       return Promise.resolve({ ok: true })
@@ -96,7 +96,7 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
     fireEvent.click(screen.getByText(/觀察 Claude session/))
-    const item = await screen.findByText('proj/chess')
+    const item = await screen.findByText('proj-chess')
     fireEvent.click(item)
     expect(bodyOf('/observe')).toEqual({ system: 'claude', file: 'C:/proj/s.jsonl' })
 
@@ -110,7 +110,7 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
   it('來源下拉:Claude session 有 title 時,標題顯示第一句、slug 落到副標', async () => {
     fetchImpl = vi.fn((path: string) => {
       if (path.startsWith('/sessions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
-        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/proj', title: '幫我重構登入流程', mtime: Date.now(), subagents: 3, trivial: false },
+        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/Users/me/Desktop/proj-chess', title: '幫我重構登入流程', mtime: Date.now(), subagents: 3, trivial: false },
       ] }) })
       return Promise.resolve({ ok: true })
     }) as unknown as typeof fetchImpl
@@ -121,7 +121,7 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     fireEvent.click(screen.getByText(/觀察 Claude session/))
     // 標題 = 第一句;slug 出現在副標(點擊會關選單,故先斷言副標再點)
     const item = await screen.findByText('幫我重構登入流程')
-    expect(screen.getByText(/proj\/chess ·/)).toBeInTheDocument()
+    expect(screen.getByText(/proj-chess ·/)).toBeInTheDocument()
     fireEvent.click(item)
     expect(bodyOf('/observe')).toEqual({ system: 'claude', file: 'C:/proj/s.jsonl' })
   })
