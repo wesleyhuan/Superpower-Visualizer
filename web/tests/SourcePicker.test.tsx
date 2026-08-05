@@ -48,6 +48,16 @@ function openClaudeList(list: SessionInfo[]) {
   return loadSessions
 }
 
+describe('SourcePicker 鍵盤', () => {
+  it('按 Esc 關閉下拉', () => {
+    render(<SourcePicker mode="control" onObserve={vi.fn()} onNewAgent={vi.fn()} loadSessions={vi.fn(() => Promise.resolve([]))} />)
+    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    expect(screen.getByText(/觀察 Claude session/)).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByText(/觀察 Claude session/)).not.toBeInTheDocument()
+  })
+})
+
 describe('SourcePicker 瑣碎摺疊', () => {
   const list: SessionInfo[] = [
     { system: 'claude', file: 'r', project: 'p', cwd: 'x', title: '真實任務', mtime: 0, subagents: 0, trivial: false },
