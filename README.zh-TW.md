@@ -146,7 +146,7 @@ Claude**(獨立的審查 session,不會動到正在觀察/操控的 agent)。它
 
 ```bash
 npm test            # 後端單元測試 (vitest, 121)
-cd web && npm test  # 前端單元測試 (vitest + jsdom, 78)
+cd web && npm test  # 前端單元測試 (vitest + jsdom, 83)
 ```
 
 型別檢查:`npx tsc --noEmit`(根與 `web/` 各自)。

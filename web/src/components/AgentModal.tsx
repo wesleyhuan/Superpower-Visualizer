@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useModalFocus } from '../hooks/useModalFocus'
 import type { AgentEntry } from '../buildAgentBlocks'
 import { buildAnalysisTrace, classifyKind } from '../buildAgentBlocks'
 import { buildAnalysisRecord, downloadJson } from '../buildAnalysisRecord'
@@ -25,6 +26,9 @@ const ScaleIcon = () => (
 )
 const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+)
+const CloseIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
 )
 const VERDICT_LABEL: Record<Verdict, string> = { ok: '妥當', warn: '有疑慮', bad: '有問題' }
 const SEV_LABEL: Record<Severity, string> = { high: '高', med: '中', low: '低' }
@@ -129,6 +133,7 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
   }, [index, hasPrev, hasNext, onIndex, onClose])
 
   const bodyRef = useRef<HTMLDivElement>(null)
+  const modalRef = useModalFocus<HTMLDivElement>()
   const [flashStep, setFlashStep] = useState<number | null>(null)
 
   if (!cur) return null
@@ -159,7 +164,7 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
 
   return (
     <div className="scrim open" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="agent-modal" role="dialog" aria-modal="true" aria-label={cur.title}>
+      <div className="agent-modal" role="dialog" aria-modal="true" aria-label={cur.title} ref={modalRef}>
         <div className="am-head">
           <span className={`arow-avatar ${cur.kind}`}>{cur.kind === 'main' ? <BoltIcon /> : <UserIcon />}</span>
           <span className="am-htext">
@@ -170,7 +175,7 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
             <span className="am-pos">{index + 1} / {entries.length}</span>
             <button className="am-navbtn" aria-label="上一個 agent" disabled={!hasPrev} onClick={() => onIndex(index - 1)}>{arrow('l')}</button>
             <button className="am-navbtn" aria-label="下一個 agent" disabled={!hasNext} onClick={() => onIndex(index + 1)}>{arrow('r')}</button>
-            <button className="am-close" aria-label="關閉" onClick={onClose}>✕</button>
+            <button className="am-close" aria-label="關閉" onClick={onClose}><CloseIcon /></button>
           </span>
         </div>
 

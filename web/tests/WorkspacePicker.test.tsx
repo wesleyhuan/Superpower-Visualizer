@@ -44,4 +44,17 @@ describe('WorkspacePicker', () => {
     await waitFor(() => expect(makeDir).toHaveBeenCalledWith('C:/p', 'proj'))
     await waitFor(() => expect(loadDirs).toHaveBeenCalledWith('C:/p/proj'))
   })
+
+  it('按 Esc 關閉', async () => {
+    const { onClose } = setup()
+    await screen.findByText('sub')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('新資料夾輸入框有可及名稱', async () => {
+    setup()
+    await screen.findByText('sub')
+    expect(screen.getByRole('textbox', { name: '新資料夾名稱' })).toBeInTheDocument()
+  })
 })

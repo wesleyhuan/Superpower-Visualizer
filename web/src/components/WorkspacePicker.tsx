@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { DirListing } from '../wireTypes'
+import { useModalFocus } from '../hooks/useModalFocus'
+
+const FolderIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+)
+const UpIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V6M6 12l6-6 6 6" /></svg>
+)
+const CloseIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+)
 
 interface Props {
   initialPath: string
@@ -29,6 +40,14 @@ export function WorkspacePicker({ initialPath, loadDirs, makeDir, onConfirm, onC
   }, [loadDirs])
   useEffect(() => { go(initialPath) }, [go, initialPath])
 
+  // 可及性:Esc 關閉(與其他 overlay 一致);開啟時聚焦 + Tab focus trap
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+  const modalRef = useModalFocus<HTMLDivElement>()
+
   const atDrives = !!listing?.drives // 磁碟根視圖:不能建資料夾/確認,需先選磁碟機
   const create = () => {
     if (!listing || atDrives || !newName.trim()) return
@@ -39,29 +58,29 @@ export function WorkspacePicker({ initialPath, loadDirs, makeDir, onConfirm, onC
 
   return (
     <div className="scrim open" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="wpick" role="dialog" aria-label="選擇工作目錄">
+      <div className="wpick" role="dialog" aria-label="選擇工作目錄" ref={modalRef}>
         <div className="wpick-head">
           <span className="wpick-title">選擇新 Agent 的工作目錄</span>
-          <button className="am-close" aria-label="關閉" onClick={onClose}>✕</button>
+          <button className="am-close" aria-label="關閉" onClick={onClose}><CloseIcon /></button>
         </div>
         <div className="wpick-crumb">{atDrives ? '此電腦' : (listing?.path || '載入中…')}</div>
         <div className="wpick-list">
           {error && <div className="wpick-error">{error}</div>}
           {listing && listing.parent !== null && (
-            <button className="wpick-row up" onClick={() => go(listing.parent as string)}>.. 上一層</button>
+            <button className="wpick-row up" onClick={() => go(listing.parent as string)}><UpIcon />上一層</button>
           )}
           {listing?.drives?.map((d) => (
-            <button key={d} className="wpick-row" onClick={() => go(d)}>{d}</button>
+            <button key={d} className="wpick-row" onClick={() => go(d)}><FolderIcon />{d}</button>
           ))}
           {listing?.entries.map((name) => (
-            <button key={name} className="wpick-row" onClick={() => go(joinPath(listing.path, name))}>{name}</button>
+            <button key={name} className="wpick-row" onClick={() => go(joinPath(listing.path, name))}><FolderIcon />{name}</button>
           ))}
           {listing && !atDrives && listing.entries.length === 0 && !error && (
             <div className="wpick-empty">(沒有子資料夾)</div>
           )}
         </div>
         <div className="wpick-new">
-          <input placeholder="新資料夾名稱…" value={newName}
+          <input aria-label="新資料夾名稱" placeholder="新資料夾名稱…" value={newName}
                  onChange={(e) => setNewName(e.target.value)} disabled={!listing || atDrives} />
           <button onClick={create} disabled={!listing || atDrives || !newName.trim()}>＋建立</button>
         </div>
