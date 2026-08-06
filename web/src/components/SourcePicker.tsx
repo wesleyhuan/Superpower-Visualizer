@@ -1,5 +1,18 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { SessionInfo, Mode, SourceSystem } from '../wireTypes'
+
+// 下拉內共用小圖示,與觸發鈕的 chevron 同一視覺系(currentColor / stroke 2.4)。
+function Chevron({ dir = 'right' }: { dir?: 'right' | 'down' | 'left' }) {
+  const rot = dir === 'down' ? 90 : dir === 'left' ? 180 : 0
+  return (
+    <svg className="si-icon" style={{ transform: `rotate(${rot}deg)` }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+  )
+}
+function Plus() {
+  return (
+    <svg className="si-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+  )
+}
 
 function relTime(ms: number): string {
   const m = Math.floor((Date.now() - ms) / 60000)
@@ -88,8 +101,23 @@ export function SourcePicker({ mode, onObserve, onNewAgent, loadSessions }: Prop
 
   const label = mode === 'observe' ? '觀察中(唯讀)' : '操控模式'
 
+  // 方向鍵在項目間移動焦點(Home/End 到首末),補足下拉的鍵盤導覽。
+  const onMenuKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+    e.preventDefault()
+    const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('.source-item'))
+    if (!items.length) return
+    const cur = items.indexOf(document.activeElement as HTMLButtonElement)
+    const next = e.key === 'Home' ? 0
+      : e.key === 'End' ? items.length - 1
+      : e.key === 'ArrowDown' ? (cur + 1) % items.length
+      : (cur - 1 + items.length) % items.length
+    items[next]?.focus()
+  }
+
+  // tooltip 帶完整標題 + 真實路徑,標題被 ellipsis 截斷時仍讀得到全文。
   const renderItem = (s: SessionInfo) => (
-    <button key={s.file} className="source-item" onClick={() => { onObserve(s.system, s.file); setOpen(false) }} title={s.cwd || s.file}>
+    <button key={s.file} className="source-item" onClick={() => { onObserve(s.system, s.file); setOpen(false) }} title={titleOf(s) + (s.cwd ? `\n${s.cwd}` : '')}>
       <span className="si-title">{titleOf(s)}</span>
       <span className="si-meta">{metaOf(s)}</span>
     </button>
@@ -104,27 +132,33 @@ export function SourcePicker({ mode, onObserve, onNewAgent, loadSessions }: Prop
       </button>
 
       {open && view === 'root' && (
-        <div className="source-menu" role="menu">
+        <div className="source-menu" aria-label="來源選單" onKeyDown={onMenuKey}>
           <button className="source-item new-agent" onClick={() => { onNewAgent(); setOpen(false) }}>
-            <span className="si-plus">＋</span>
+            <span className="si-plus"><Plus /></span>
             <span>新 Agent(操控)</span>
           </button>
           <div className="source-menu-label">觀察其他 session(唯讀)</div>
-          <button className="source-item" onClick={() => pickSystem('claude')}>
-            <span className="si-title">觀察 Claude session ▸</span>
-            <span className="si-meta">~/.claude/projects</span>
+          <button className="source-item drill" onClick={() => pickSystem('claude')}>
+            <span className="si-text">
+              <span className="si-title">觀察 Claude session</span>
+              <span className="si-meta">~/.claude/projects</span>
+            </span>
+            <Chevron />
           </button>
-          <button className="source-item" onClick={() => pickSystem('antigravity')}>
-            <span className="si-title">觀察 Antigravity 對話 ▸</span>
-            <span className="si-meta">~/.gemini/antigravity</span>
+          <button className="source-item drill" onClick={() => pickSystem('antigravity')}>
+            <span className="si-text">
+              <span className="si-title">觀察 Antigravity 對話</span>
+              <span className="si-meta">~/.gemini/antigravity</span>
+            </span>
+            <Chevron />
           </button>
         </div>
       )}
 
       {open && view !== 'root' && (
-        <div className="source-menu" role="menu">
+        <div className="source-menu" aria-label="來源選單" onKeyDown={onMenuKey}>
           <button className="source-item back" onClick={() => setView('root')}>
-            <span className="si-plus">◂</span>
+            <span className="si-plus"><Chevron dir="left" /></span>
             <span>{view === 'antigravity' ? 'Antigravity 對話' : 'Claude session'}</span>
           </button>
           {loading
@@ -139,7 +173,7 @@ export function SourcePicker({ mode, onObserve, onNewAgent, loadSessions }: Prop
                       {trivial.length > 0 && (
                         <>
                           <button className="source-item trivial-toggle" onClick={() => setShowTrivial((v) => !v)}>
-                            <span className="si-plus">{showTrivial ? '▾' : '▸'}</span>
+                            <span className="si-plus"><Chevron dir={showTrivial ? 'down' : 'right'} /></span>
                             <span>{showTrivial ? '收起' : '顯示'}瑣碎 session ({trivial.length})</span>
                           </button>
                           {showTrivial && trivial.map(renderItem)}

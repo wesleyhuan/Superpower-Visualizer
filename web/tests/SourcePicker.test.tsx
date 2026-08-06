@@ -56,6 +56,33 @@ describe('SourcePicker 鍵盤', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByText(/觀察 Claude session/)).not.toBeInTheDocument()
   })
+
+  it('方向鍵在項目間移動焦點', () => {
+    render(<SourcePicker mode="control" onObserve={vi.fn()} onNewAgent={vi.fn()} loadSessions={vi.fn(() => Promise.resolve([]))} />)
+    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    const newAgent = screen.getByText(/新 Agent/).closest('button')!
+    const claude = screen.getByText(/觀察 Claude session/).closest('button')!
+    newAgent.focus()
+    fireEvent.keyDown(newAgent.closest('.source-menu')!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(claude)
+    fireEvent.keyDown(claude.closest('.source-menu')!, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(newAgent)
+  })
+})
+
+describe('SourcePicker tooltip', () => {
+  it('項目 title 帶完整標題與路徑(截斷也讀得到全文)', async () => {
+    const long = '請逐一用 Read 讀取 src/ 底下每個 .ts 檔並各用一句話說明用途,一個一個慢慢讀完全部不要略過'
+    const loadSessions = vi.fn(() => Promise.resolve<SessionInfo[]>(
+      [{ system: 'claude', file: 'f', project: 'p', cwd: 'C:/proj', title: long, mtime: 0, subagents: 0, trivial: false }],
+    ))
+    render(<SourcePicker mode="control" onObserve={vi.fn()} onNewAgent={vi.fn()} loadSessions={loadSessions} />)
+    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    fireEvent.click(screen.getByText(/觀察 Claude session/))
+    const btn = (await screen.findByText(long)).closest('button')!
+    expect(btn.title).toContain(long)
+    expect(btn.title).toContain('C:/proj')
+  })
 })
 
 describe('SourcePicker 瑣碎摺疊', () => {

@@ -227,6 +227,12 @@ svg { display: block; }
 .source-item.trivial-toggle { flex-direction: row; align-items: center; gap: 8px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border); border-radius: 0 0 8px 8px; color: var(--fg-muted); font-size: 12px; }
 .source-item.trivial-toggle:hover { color: var(--fg); }
 .source-item.trivial-toggle .si-plus { font-size: 11px; line-height: 1; color: var(--fg-faint); }
+/* 下拉小圖示:置中旋轉,弱化色 */
+.si-icon { flex: none; transform-origin: center; }
+/* 「觀察 X」下鑽列:文字堆疊在左,chevron 靠右 */
+.source-item.drill { flex-direction: row; align-items: center; gap: 8px; }
+.source-item.drill .si-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.source-item.drill .si-icon { color: var(--fg-faint); }
 .si-title { font-size: 13px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .si-meta { font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .source-empty { font-size: 12px; color: var(--fg-muted); padding: 8px 10px; }
