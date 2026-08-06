@@ -66,6 +66,11 @@ body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sa
 .workspace { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; color: var(--fg-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 4px 9px; max-width: 40ch; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--fg-muted); display: grid; place-items: center; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
 .icon-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+/* 鍵盤可及性:全站互動控制的統一焦點環(與 input / source-item 一致) */
+.icon-btn:focus-visible, .badge-await:focus-visible, .arow:focus-visible,
+.subchip:focus-visible, .am-navbtn:focus-visible, .am-close:focus-visible {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
 
 .ended-banner { display: flex; align-items: center; gap: 8px; padding: 9px 13px; border-radius: 9px; background: var(--st-error-bg); color: var(--st-error); border: 1px solid color-mix(in srgb, var(--st-error) 35%, transparent); font-size: 13px; font-weight: 550; }
 

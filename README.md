@@ -183,7 +183,7 @@ the chat).
 
 ```bash
 npm test            # backend unit tests (vitest, 121)
-cd web && npm test  # frontend unit tests (vitest + jsdom, 70)
+cd web && npm test  # frontend unit tests (vitest + jsdom, 71)
 ```
 
 Type-check: `npx tsc --noEmit` (in the root and `web/` separately).
