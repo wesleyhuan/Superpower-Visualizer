@@ -22,4 +22,9 @@ describe('<ApprovalModal>', () => {
     fireEvent.click(screen.getByRole('button', { name: '拒絕' }))
     expect(onDecide).toHaveBeenCalledWith('t1', false)
   })
+
+  it('開啟時焦點落在「拒絕」鈕(安全預設)', () => {
+    render(<ApprovalModal pending={[{ toolUseId: 't1', name: 'Bash', input: {} }]} onDecide={vi.fn()} />)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '拒絕' }))
+  })
 })

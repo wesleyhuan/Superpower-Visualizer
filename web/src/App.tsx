@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useSession, type SessionDeps } from './useSession'
 import { buildAgentBlocks, flattenAgents } from './buildAgentBlocks'
 import { AgentList } from './components/AgentList'
@@ -66,7 +66,18 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
     else followup(text)
     setDraft('')
   }
-  const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) send() }
+  // Enter 送出;Shift+Enter 換行;輸入法組字中不送出
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
+  }
+  // 任務框隨內容長高(1 行起,最多約 5 行)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const ta = taRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
+  }, [draft])
 
   const nodeCount = state.order.length
   const subCount = main.children.length
@@ -133,15 +144,18 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
             )}
             <div className="field">
               <span className="prompt-caret">&gt;</span>
-              <input
+              <textarea
+                ref={taRef}
+                rows={1}
+                aria-label="任務輸入"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={onKey}
                 disabled={isObserving}
                 placeholder={
                   isObserving ? '觀察中(唯讀)—切到「新 Agent」才能操控'
-                    : hasStarted && !state.sessionEnded ? '派新任務給 agent…'
-                    : '輸入初始任務啟動 agent…'
+                    : hasStarted && !state.sessionEnded ? '派新任務給 agent…(Shift+Enter 換行)'
+                    : '輸入初始任務啟動 agent…(Shift+Enter 換行)'
                 }
               />
             </div>

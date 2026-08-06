@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { PendingApproval } from '../store'
 
 const Check = () => (
@@ -18,6 +18,8 @@ function formatInput(input: unknown): string {
 
 export function ApprovalModal({ pending, onDecide }: { pending: PendingApproval[]; onDecide: (toolUseId: string, allow: boolean) => void }) {
   const current = pending[0]
+  const modalRef = useRef<HTMLDivElement>(null)
+  const denyRef = useRef<HTMLButtonElement>(null)
 
   // Esc = 拒絕(安全預設)
   useEffect(() => {
@@ -27,11 +29,24 @@ export function ApprovalModal({ pending, onDecide }: { pending: PendingApproval[
     return () => document.removeEventListener('keydown', onKey)
   }, [current, onDecide])
 
+  // 開啟時把焦點移到「拒絕」鈕(安全預設),鍵盤使用者不必先 Tab 進來
+  useEffect(() => { if (current) denyRef.current?.focus() }, [current?.toolUseId])
+
+  // 簡易 focus trap:Tab 到邊界時繞回,焦點不逸出 modal
+  const onTab = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab') return
+    const f = modalRef.current?.querySelectorAll<HTMLButtonElement>('button')
+    if (!f?.length) return
+    const first = f[0], last = f[f.length - 1]
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+  }
+
   if (!current) return null
 
   return (
     <div className="scrim" onClick={(e) => { if (e.target === e.currentTarget) onDecide(current.toolUseId, false) }}>
-      <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="approval-title">
+      <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="approval-title" ref={modalRef} onKeyDown={onTab}>
         <div className="modal-head">
           <span className="ring" />
           <h3 id="approval-title">等待你核准</h3>
@@ -42,7 +57,7 @@ export function ApprovalModal({ pending, onDecide }: { pending: PendingApproval[
           <pre>{formatInput(current.input)}</pre>
         </div>
         <div className="modal-foot">
-          <button className="btn btn-deny" onClick={() => onDecide(current.toolUseId, false)}><Cross />拒絕</button>
+          <button className="btn btn-deny" onClick={() => onDecide(current.toolUseId, false)} ref={denyRef}><Cross />拒絕</button>
           <button className="btn btn-approve" onClick={() => onDecide(current.toolUseId, true)}><Check />核准</button>
         </div>
       </div>

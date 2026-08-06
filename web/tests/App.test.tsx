@@ -47,6 +47,23 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     expect(bodyOf('/start')).toEqual({ prompt: '重構登入' })
   })
 
+  it('任務輸入框有穩定的可及名稱(不靠會變動的 placeholder)', () => {
+    renderApp()
+    push(snapshot())
+    expect(screen.getByRole('textbox', { name: '任務輸入' })).toBeInTheDocument()
+  })
+
+  it('Enter 送出、Shift+Enter 不送出(可換行)', () => {
+    renderApp()
+    push(snapshot())
+    const box = screen.getByRole('textbox', { name: '任務輸入' })
+    fireEvent.change(box, { target: { value: '任務A' } })
+    fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
+    expect(bodyOf('/start')).toBeNull()
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(bodyOf('/start')).toEqual({ prompt: '任務A' })
+  })
+
   it('await:tool → 跳出核准 modal;按核准 → POST /control approve 且 modal 關閉', async () => {
     renderApp()
     push(snapshot())
