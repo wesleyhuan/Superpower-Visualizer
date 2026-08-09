@@ -1,4 +1,5 @@
 import { resolve, sep, join } from 'node:path'
+import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import type { SourceSystem } from './sourceSystems'
 
@@ -28,6 +29,13 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
   }
 }
 
+// 反 CSRF:改狀態請求(非 GET/HEAD)須來自本機 Origin;讀取(GET/HEAD)一律放行
+// (回應由瀏覽器同源政策保護)。非瀏覽器客戶端不送 Origin → 放行(與 WS 政策一致)。
+export function isCsrfSafe(method: string, origin: string | undefined): boolean {
+  if (method === 'GET' || method === 'HEAD') return true
+  return isAllowedOrigin(origin)
+}
+
 // 各系統可觀察檔的白名單根目錄。
 function observeRoot(system: SourceSystem): string {
   return system === 'antigravity'
@@ -35,11 +43,18 @@ function observeRoot(system: SourceSystem): string {
     : join(homedir(), '.claude', 'projects')
 }
 
-// 驗證要觀察的檔案落在該系統允許的根目錄內。正規化後比對(加上分隔符邊界,
-// 避免 projects-evil 這種前綴相同卻非子目錄的繞過),防任意檔讀 / 路徑穿越。
-export function isObservableFile(system: SourceSystem, file: string): boolean {
+// 驗證 file 落在 root 內。正規化後比對(加分隔符邊界,避免 projects-evil 這種前綴相同
+// 卻非子目錄的繞過);實體檔再以 realpathSync 解析 symlink,防指向 root 外的連結繞過白名單。
+// 檔案不存在時退回文字正規化(反正讀不到,且保留原行為)。
+export function isUnderRoot(root: string, file: string): boolean {
   if (!file) return false
-  const root = resolve(observeRoot(system))
-  const target = resolve(file)
-  return target === root || target.startsWith(root + sep)
+  const base = resolve(root)
+  let target = resolve(file)
+  try { target = realpathSync(target) } catch { /* 不存在 → 用正規化路徑 */ }
+  return target === base || target.startsWith(base + sep)
+}
+
+// 驗證要觀察的檔案落在該系統允許的根目錄內,防任意檔讀 / 路徑穿越 / symlink 繞過。
+export function isObservableFile(system: SourceSystem, file: string): boolean {
+  return isUnderRoot(observeRoot(system), file)
 }

@@ -4,3 +4,5 @@ dist
 .claude
 newui-*.png
 .superpowers/
+.env
+.env.*

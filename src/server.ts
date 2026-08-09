@@ -6,7 +6,7 @@ import { SourceController } from './sourceController'
 import { ReActAssembler } from './reactAssembler'
 import { makeObserveSource, workspaceFor, listObservableSessions } from './sourceSystems'
 import { listDirs, makeDir } from './dirs'
-import { isLocalHost, isAllowedOrigin, isObservableFile } from './security'
+import { isLocalHost, isAllowedOrigin, isObservableFile, isCsrfSafe } from './security'
 import type { SourceSystem } from './sourceSystems'
 import { translate } from './translator'
 import { realRunQuery, resolveWorkspace } from './agentAdapter'
@@ -60,6 +60,15 @@ export function createServer() {
     if (!isLocalHost(req.headers.host)) {
       console.error('[server] 拒絕非本機 Host:', req.headers.host)
       return res.status(403).json({ error: 'forbidden host' })
+    }
+    next()
+  })
+  // 反 CSRF:改狀態請求(POST 等)須來自本機 Origin。顯式擋跨站,不再只靠
+  // express.json 不解析非 JSON body + preflight 的隱性防護(見安全審查)。
+  app.use((req, res, next) => {
+    if (!isCsrfSafe(req.method, req.headers.origin)) {
+      console.error('[server] 拒絕跨站改狀態請求 Origin:', req.headers.origin)
+      return res.status(403).json({ error: 'forbidden origin' })
     }
     next()
   })
