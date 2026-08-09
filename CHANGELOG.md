@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### 安全強化(2026-08-09)
+
+一次針對本機工具威脅模型(使用者造訪的惡意網頁、其他本機程序、路徑/注入濫用)的安全審查與縱深防禦補強。後端單元測試 **121 → 126**。
+
+#### Security(安全)
+- **改狀態路由加顯式 CSRF/Origin 檢查**:新增 `isCsrfSafe(method, origin)`——非 `GET`/`HEAD` 請求須來自本機 `Origin`(無 `Origin` 的非瀏覽器客戶端放行);server 加中介層擋跨站改狀態請求。原本僅靠「`express.json` 不解析非 JSON body + `application/json` 觸發 preflight」的**隱性**防護,現改為**顯式**,避免未來改動 body 解析或 CORS 設定時防護消失。
+- **`/observe` 白名單解析 symlink**:新增 `isUnderRoot()` 以 `realpathSync` 解析實體檔,防 `~/.claude/projects` 內指向外部的 symlink 以文字前綴繞過白名單;`isObservableFile()` 改為委派(檔案不存在時退回文字正規化,保留原行為)。
+- **`.gitignore` 補 `.env` / `.env.*`**:目前碼中無密鑰(Agent SDK 沿用 Claude Code CLI 登入),為防未來誤 commit。
+
+#### 審查結論(現況良好、無需改動的既有控制)
+- 綁 `127.0.0.1`(非 LAN)、反 DNS rebinding(HTTP `Host` + WS `Origin`)。
+- **agent 工具全程人工核准**:`canUseTool` 對每個工具呼叫 block 成 pending,只有使用者按核准/拒絕才放行,無自動執行。
+- `makeDir` 名稱驗證擋 `.`/`..`/路徑分隔符;前端無 XSS sink(React 轉義);後端無命令執行;碼中無密鑰。
+- 已知悉的低風險(屬單人本機工具固有特性,由 127.0.0.1 + CORS 緩解):`/dirs`·`/mkdir` 無路徑白名單、WS 允許無 `Origin` 的本機非瀏覽器連線。
+
 ### 可及性與 UI/UX 強化(2026-08-07)
 
 一批聚焦於**鍵盤可及性、對比、圖示一致性**的前端改進,涵蓋 SourcePicker、header、Agents 面板、對話面板,以及三個 overlay(ApprovalModal / AgentModal / WorkspacePicker)。前端單元測試 **65 → 83**。
