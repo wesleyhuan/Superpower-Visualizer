@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 開發基礎建設
+
+- **GitHub Actions CI**:push / PR 到 `master` 時自動跑後端 + 前端的 `tsc --noEmit` 與單元測試(Node 24)。
+- **後端路由 HTTP 整合測試**:`server.ts` 拆出可測的 `buildApp(deps)`(路由 + 中介層,不含 listen/WS);用 supertest 鎖住安全行為(非本機 Host→403、跨站改狀態 Origin→403、`/observe` 越界路徑→400)。後端測試 126 → 133。
+
 ## [1.1.0] - 2026-08-09
 
 ### 安全強化(2026-08-09)

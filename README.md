@@ -1,5 +1,7 @@
 # Superpower Visualizer
 
+[![CI](https://github.com/wesleyhuan/Superpower-Visualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/wesleyhuan/Superpower-Visualizer/actions/workflows/ci.yml)
+
 **English** | [繁體中文](README.zh-TW.md)
 
 A local web app that **watches and steers** a Claude agent while it works. The UI *is* the
@@ -182,7 +184,7 @@ the chat).
 ## Tests
 
 ```bash
-npm test            # backend unit tests (vitest, 121)
+npm test            # backend unit tests (vitest, 133)
 cd web && npm test  # frontend unit tests (vitest + jsdom, 83)
 ```
 

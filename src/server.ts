@@ -49,7 +49,9 @@ export function wireEvents(
   })
 }
 
-export function createServer() {
+// 建 express app(路由 + 中介層),不含 listen / WebSocket,方便用 supertest 測。
+// runQuery 可注入假實作,測試路由時不會真的呼叫 Agent SDK。
+export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
   const app = express()
   // 放寬 body 上限:大型 agent 的 ReAct trace(如 186 步)JSON 可能超過預設 100KB,
   // 否則 /analyze 會回 413 → 前端 res.json() 失敗 → 靜默退成一般「分析失敗」。
@@ -73,7 +75,7 @@ export function createServer() {
     next()
   })
   const store = new SnapshotStore()
-  const mgr = new SessionManager({ runQuery: realRunQuery })
+  const mgr = new SessionManager({ runQuery: deps.runQuery ?? realRunQuery })
   const clients = new Set<WebSocket>()
 
   const broadcast = (packet: unknown) => {
@@ -184,6 +186,11 @@ export function createServer() {
     }
   })
 
+  return { app, clients, controller }
+}
+
+export function createServer() {
+  const { app, clients, controller } = buildApp()
   // 綁 127.0.0.1(非 0.0.0.0):本機單人工具,/dirs /mkdir /start 等會碰檔案系統與啟動 agent,
   // 不該對 LAN 開放。WebSocketServer 共用這個 server,一併只聽本機。
   const server = app.listen(3001, '127.0.0.1', () => console.log('[server] http on 127.0.0.1:3001'))

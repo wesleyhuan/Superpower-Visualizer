@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      # 後端(root):型別檢查 + 單元測試
+      - name: Backend — install
+        run: npm ci
+      - name: Backend — typecheck
+        run: npx tsc --noEmit
+      - name: Backend — test
+        run: npm test
+
+      # 前端(web):型別檢查 + 單元測試
+      - name: Web — install
+        run: npm ci
+        working-directory: web
+      - name: Web — typecheck
+        run: npx tsc --noEmit
+        working-directory: web
+      - name: Web — test
+        run: npm test
+        working-directory: web
