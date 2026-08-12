@@ -22,7 +22,7 @@ jobs:
 
       # 後端(root):型別檢查 + 單元測試
       - name: Backend — install
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Backend — typecheck
         run: npx tsc --noEmit
       - name: Backend — test
@@ -30,7 +30,7 @@ jobs:
 
       # 前端(web):型別檢查 + 單元測試
       - name: Web — install
-        run: npm ci
+        run: npm install --no-audit --no-fund
         working-directory: web
       - name: Web — typecheck
         run: npx tsc --noEmit
