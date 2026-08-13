@@ -38,3 +38,33 @@ export type ControlCommand =
   | { type: 'pause' }
   | { type: 'approve'; toolUseId: string; allow: boolean }
   | { type: 'followup'; text: string }
+
+// ── 合理性分析(POST /analyze):把一個 agent 的 ReAct 軌跡交給另一個 Claude 審查 ──
+export interface AnalysisStep {
+  index: number      // 1-based,對應彈窗步序,供指摘回指
+  label: string
+  kind: string       // TOOL / SKILL / MCP / SUB
+  status: string
+  reason?: string
+  output?: string
+}
+export interface AnalysisTrace {
+  title: string
+  kind: 'main' | 'sub'
+  steps: AnalysisStep[]
+}
+export type Verdict = 'ok' | 'warn' | 'bad'   // 妥當 / 有疑慮 / 有問題
+export type Severity = 'high' | 'med' | 'low'
+export interface Finding {
+  severity: Severity
+  step: number       // 對應 AnalysisStep.index;0 = 整體性問題,不指向單一步
+  issue: string
+  suggestion: string
+}
+export interface AnalysisResult {
+  verdict: Verdict
+  summary: string
+  findings: Finding[]
+  reviewerModel?: string   // 產出這份審核的模型(供匯出後給其他模型裁判);後端沿用 CLI 模型故動態帶回
+  promptVersion?: string   // 審核 prompt 版本,prompt 改了就 bump,方便評估重現
+}

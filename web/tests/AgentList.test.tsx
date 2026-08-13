@@ -23,4 +23,9 @@ describe('<AgentList>', () => {
     fireEvent.click(screen.getByText('研究結構'))
     expect(onOpen).toHaveBeenCalledWith(1)
   })
+
+  it('列的 title 帶完整標題(截斷也讀得到全文)', () => {
+    render(<AgentList entries={entries} onOpen={vi.fn()} />)
+    expect(screen.getByText('研究結構').closest('button')?.getAttribute('title')).toBe('研究結構')
+  })
 })

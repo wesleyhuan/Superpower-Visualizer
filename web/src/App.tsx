@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useSession, type SessionDeps } from './useSession'
 import { buildAgentBlocks, flattenAgents } from './buildAgentBlocks'
 import { AgentList } from './components/AgentList'
@@ -6,7 +6,8 @@ import { AgentModal } from './components/AgentModal'
 import { Conversation } from './components/Conversation'
 import { ApprovalModal } from './components/ApprovalModal'
 import { SourcePicker } from './components/SourcePicker'
-import type { LogEntry } from './wireTypes'
+import { WorkspacePicker } from './components/WorkspacePicker'
+import type { LogEntry, AnalysisTrace, AnalysisState } from './wireTypes'
 
 type Theme = 'light' | 'dark'
 
@@ -34,7 +35,7 @@ const SunPath = 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5 19 19M3 12h2M19 12h2M5 19
 const MoonPath = 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z'
 
 export function App({ deps }: { deps?: SessionDeps } = {}) {
-  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions } = useSession(deps)
+  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions, analyze, loadDirs, makeDir } = useSession(deps)
   const [theme, toggleTheme] = useTheme()
   const [draft, setDraft] = useState('')
   const isObserving = state.mode === 'observe'
@@ -44,6 +45,17 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
   const mainTitle = state.messages.find((m) => m.role === 'user')?.text ?? '主 Agent'
   const entries = useMemo(() => flattenAgents(main, mainTitle), [main, mainTitle])
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [analyses, setAnalyses] = useState<Record<string, AnalysisState>>({})
+  const onAnalyze = useCallback((key: string, trace: AnalysisTrace) => {
+    setAnalyses((m) => ({ ...m, [key]: { status: 'loading' } }))
+    analyze(trace)
+      .then((result) => setAnalyses((m) => ({ ...m, [key]: { status: 'done', result } })))
+      .catch((err) => {
+        console.error('[App] 分析失敗', err)
+        setAnalyses((m) => ({ ...m, [key]: { status: 'error' } }))
+      })
+  }, [analyze])
   const hasStarted = state.order.length > 0 || state.messages.some((m) => m.role === 'user')
 
   const send = () => {
@@ -54,7 +66,18 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
     else followup(text)
     setDraft('')
   }
-  const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) send() }
+  // Enter 送出;Shift+Enter 換行;輸入法組字中不送出
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
+  }
+  // 任務框隨內容長高(1 行起,最多約 5 行)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const ta = taRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
+  }, [draft])
 
   const nodeCount = state.order.length
   const subCount = main.children.length
@@ -70,7 +93,7 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
           <div><h1>Superpower Visualizer</h1><div className="sub">Agent 即時監控</div></div>
         </div>
         <div className="spacer" />
-        <SourcePicker mode={state.mode} onObserve={observe} onNewAgent={newAgent} loadSessions={loadSessions} />
+        <SourcePicker mode={state.mode} onObserve={observe} onNewAgent={() => setPickerOpen(true)} loadSessions={loadSessions} />
         {state.pending.length > 0 && (
           <span className="badge-await"><span className="bdot" /> {state.pending.length} 待核准</span>
         )}
@@ -121,15 +144,18 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
             )}
             <div className="field">
               <span className="prompt-caret">&gt;</span>
-              <input
+              <textarea
+                ref={taRef}
+                rows={1}
+                aria-label="任務輸入"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={onKey}
                 disabled={isObserving}
                 placeholder={
                   isObserving ? '觀察中(唯讀)—切到「新 Agent」才能操控'
-                    : hasStarted && !state.sessionEnded ? '派新任務給 agent…'
-                    : '輸入初始任務啟動 agent…'
+                    : hasStarted && !state.sessionEnded ? '派新任務給 agent…(Shift+Enter 換行)'
+                    : '輸入初始任務啟動 agent…(Shift+Enter 換行)'
                 }
               />
             </div>
@@ -146,11 +172,22 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
           entries={entries}
           index={openIndex}
           outputByNode={outputs}
+          analysisByKey={analyses}
+          onAnalyze={onAnalyze}
           onIndex={setOpenIndex}
           onClose={() => setOpenIndex(null)}
         />
       )}
       <ApprovalModal pending={state.pending} onDecide={approve} />
+      {pickerOpen && (
+        <WorkspacePicker
+          initialPath={state.workspace}
+          loadDirs={loadDirs}
+          makeDir={makeDir}
+          onConfirm={(cwd) => { newAgent(cwd); setPickerOpen(false) }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   )
 }

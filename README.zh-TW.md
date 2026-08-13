@@ -92,6 +92,10 @@ powershell -Command "Stop-Process -Id <PID> -Force"
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 ```
 
+**或在 UI 直接選:** 開來源下拉 →「**＋新 Agent**」現在會彈出**工作目錄選擇器** —— 麵包屑導覽、上一層、
+Windows 磁碟根,還能當場建立空資料夾,按「**使用這個目錄**」就用該資料夾當下一個 agent 的工作目錄。
+`AGENT_WORKSPACE` 變成選擇器的起始預設。(僅控制模式;觀察模式不變。)
+
 ### B. 觀察模式(Route A)— 唯讀旁觀其他 coding agent
 
 1. 點「來源」下拉 → **先選系統**:「觀察 Claude session」或「觀察 Antigravity 對話」。
@@ -103,6 +107,11 @@ AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 4. 觀察模式是**唯讀**的:標題轉「觀察中(唯讀)」、輸入框停用、沒有核准框 / 暫停(逐字稿是歷史紀錄)。
 5. 要看**你自己當下這個 Claude session**,選 Claude 清單最上面、時間顯示「剛剛」的那筆即可。
 6. 選「＋ 新 Agent(操控)」回到操控模式(畫面清空、可重新下任務)。
+
+> **瑣碎 session 自動收合**:開頭是純 slash 指令(如 `/model`、空 `/init`)且**沒對專案做任何事**
+> ——無改檔工具(Write/Edit…)、無 subagent、記錄少——的 session 會被判為「瑣碎」,預設收進清單底部的
+> **「顯示瑣碎 session (N)」** toggle,點開才顯示。**不刪除**,也**不會誤收** `/init` 後有實質修改的 session
+> (只對「純指令開頭 + 無 subagent」的候選做 256KB 有界掃描,判定成本近乎零)。
 
 > **Antigravity 的 reason**:每個工具步驟自帶 `toolAction`(為什麼)與 `toolSummary`(做什麼),
 > 分別進「💡 想法」與「🔧 動作」。Antigravity 常把思考與動作放同一步,所以工具不會漏。
@@ -125,13 +134,19 @@ AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 > 理由來源是 agent 自己的敘述文字(操控、觀察兩種模式都有)。模型的「內心思考」(extended thinking)在逐字稿裡
 > 是被清空的,無法顯示。沒有前置敘述的工具就只顯示動作,屬正常。
 
+**合理性分析(⚖)**:在彈窗內點 **「分析合理性」**,會把**這個 agent** 的 ReAct 軌跡交給**另一個
+Claude**(獨立的審查 session,不會動到正在觀察/操控的 agent)。它回傳結構化判定 —— **妥當 / 有疑慮 /
+有問題** —— 加一段總評,以及一份指摘清單:每項有嚴重度(高/中/低)、對應的步驟(可點,捲到並高亮那筆
+工作項目),與建議做法。走無狀態的 `POST /analyze`;結果以 agent 為單位在 session 內快取(不落地儲存),
+操控、觀察兩種模式都能用。
+
 右側「對話」欄則只留**真對話**:你的任務指令 + agent 給你的總結/回答(逐步細節都在左側彈窗,不洗版對話)。
 
 ## 測試
 
 ```bash
-npm test            # 後端單元測試 (vitest, 66)
-cd web && npm test  # 前端單元測試 (vitest + jsdom, 33)
+npm test            # 後端單元測試 (vitest, 133)
+cd web && npm test  # 前端單元測試 (vitest + jsdom, 83)
 ```
 
 型別檢查:`npx tsc --noEmit`(根與 `web/` 各自)。

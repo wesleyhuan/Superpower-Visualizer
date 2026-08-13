@@ -72,4 +72,15 @@ describe('SourceController', () => {
     expect(broadcasts).toHaveLength(1)
     expect(broadcasts[0]).toMatchObject({ type: 'snapshot', mode: 'control', workspace: 'C:/work', nodes: [] })
   })
+
+  it('toControl(cwd) 設定 workspace 與 controlCwd;無 cwd 用預設', () => {
+    const store = new SnapshotStore()
+    const ctrl = new SourceController(store, () => {}, () => 'C:/default')
+    ctrl.toControl('C:/picked')
+    expect(ctrl.workspace).toBe('C:/picked')
+    expect(ctrl.controlCwd()).toBe('C:/picked')
+    ctrl.toControl()
+    expect(ctrl.workspace).toBe('C:/default')
+    expect(ctrl.controlCwd()).toBeUndefined()
+  })
 })

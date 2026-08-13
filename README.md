@@ -1,5 +1,7 @@
 # Superpower Visualizer
 
+[![CI](https://github.com/wesleyhuan/Superpower-Visualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/wesleyhuan/Superpower-Visualizer/actions/workflows/ci.yml)
+
 **English** | [繁體中文](README.zh-TW.md)
 
 A local web app that **watches and steers** a Claude agent while it works. The UI *is* the
@@ -107,6 +109,12 @@ for Read / Write / Bash resolve against it); the header shows the current workin
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 ```
 
+**Or pick it in the UI:** open the source dropdown → **＋ New Agent** now opens a **directory picker** —
+browse folders (breadcrumb + parent + drive roots on Windows), optionally create a new empty folder, and
+click **"使用這個目錄" (Use this folder)** to launch the next agent with that folder as its working
+directory. `AGENT_WORKSPACE` becomes the default the picker starts from. (Control mode only; observe mode
+is unchanged.)
+
 ### B. Observe mode (Route A) — read-only watching of another coding agent
 
 1. Open the "source" dropdown → **pick a system first**: "Observe a Claude session" or "Observe an
@@ -123,6 +131,13 @@ AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
 5. To watch **your own current Claude session**, pick the top entry in the Claude list — the one whose
    time shows "just now".
 6. Pick "＋ New Agent (control)" to return to control mode (the view clears, ready for a new task).
+
+> **Trivial sessions are auto-collapsed**: a session that starts with a bare slash command (e.g.
+> `/model`, an empty `/init`) and did **no project work** — no mutating tool (Write/Edit…), no
+> subagents, few records — is flagged "trivial" and folded into a default-collapsed **"顯示瑣碎
+> session (N)"** toggle at the bottom of the list; click to reveal them. Nothing is deleted, and an
+> `/init` that led to real edits is **never** mis-folded (only "bare-command + no subagent"
+> candidates get a bounded 256KB scan, so the check is near-zero cost).
 
 > **Antigravity's reason**: each tool step carries both `toolAction` (the *why*) and `toolSummary`
 > (the *what*), which feed the "💡 Thought" and "🔧 Action" lines respectively. Antigravity usually
@@ -154,6 +169,14 @@ Every step inside the popup follows the ReAct paradigm so you can see **why** th
 > model's inner "extended thinking" is redacted (empty) in transcripts and can't be shown. A tool with
 > no preceding narration simply shows the action only — that's normal.
 
+**Reasonableness analysis (⚖):** inside the popup, click **"分析合理性" (Analyze reasonableness)** to
+send *this agent's* ReAct trace to a **separate Claude** (an independent review session — it does not
+touch the observed/controlled agent). It returns a structured verdict — **妥當 / 有疑慮 / 有問題**
+(sound / questionable / problematic) — a short summary, and a list of findings, each with a severity
+(high/med/low), the step it points at (click to jump + highlight the matching work item), and a
+suggested fix. Runs through a stateless `POST /analyze` endpoint; results are cached per agent for the
+session (not persisted). Works in both control and observe mode.
+
 The right "Conversation" panel keeps only the **real dialogue**: your task instructions + the agent's
 summaries/answers to you (the step-by-step detail lives in the left-side popup, so it no longer floods
 the chat).
@@ -161,8 +184,8 @@ the chat).
 ## Tests
 
 ```bash
-npm test            # backend unit tests (vitest, 66)
-cd web && npm test  # frontend unit tests (vitest + jsdom, 33)
+npm test            # backend unit tests (vitest, 133)
+cd web && npm test  # frontend unit tests (vitest + jsdom, 83)
 ```
 
 Type-check: `npx tsc --noEmit` (in the root and `web/` separately).

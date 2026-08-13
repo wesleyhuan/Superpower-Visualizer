@@ -68,3 +68,15 @@ describe('SessionManager: pause', () => {
     expect(signals[1].aborted).toBe(false) // 新 session 拿到全新、未 abort 的 signal
   })
 })
+
+describe('SessionManager: cwd', () => {
+  it('start(prompt, cwd) 會把 cwd 傳給 runQuery', async () => {
+    let seen: any
+    const mgr = new SessionManager({
+      runQuery: (args: any) => { seen = args; return (async function* () {})() },
+    })
+    mgr.start('做事', 'C:/work')
+    await Promise.resolve()
+    expect(seen.cwd).toBe('C:/work')
+  })
+})

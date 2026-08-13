@@ -47,6 +47,23 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     expect(bodyOf('/start')).toEqual({ prompt: '重構登入' })
   })
 
+  it('任務輸入框有穩定的可及名稱(不靠會變動的 placeholder)', () => {
+    renderApp()
+    push(snapshot())
+    expect(screen.getByRole('textbox', { name: '任務輸入' })).toBeInTheDocument()
+  })
+
+  it('Enter 送出、Shift+Enter 不送出(可換行)', () => {
+    renderApp()
+    push(snapshot())
+    const box = screen.getByRole('textbox', { name: '任務輸入' })
+    fireEvent.change(box, { target: { value: '任務A' } })
+    fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
+    expect(bodyOf('/start')).toBeNull()
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(bodyOf('/start')).toEqual({ prompt: '任務A' })
+  })
+
   it('await:tool → 跳出核准 modal;按核准 → POST /control approve 且 modal 關閉', async () => {
     renderApp()
     push(snapshot())
@@ -86,7 +103,31 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
   it('來源下拉:先選 Claude → 載入 sessions → 點某個 → POST /observe;點新 Agent → POST /new-agent', async () => {
     fetchImpl = vi.fn((path: string) => {
       if (path.startsWith('/sessions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
-        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/proj', mtime: Date.now(), subagents: 3 },
+        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/Users/me/Desktop/proj-chess', mtime: Date.now(), subagents: 3, trivial: false },
+      ] }) })
+      if (path.startsWith('/dirs')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ path: 'C:/here', parent: 'C:/', entries: [] }) })
+      return Promise.resolve({ ok: true })
+    }) as unknown as typeof fetchImpl
+    renderApp()
+    push(snapshot({ workspace: 'C:/here' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    fireEvent.click(screen.getByText(/觀察 Claude session/))
+    const item = await screen.findByText('proj-chess')
+    fireEvent.click(item)
+    expect(bodyOf('/observe')).toEqual({ system: 'claude', file: 'C:/proj/s.jsonl' })
+
+    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
+    fireEvent.click(await screen.findByText(/新 Agent/))
+    // 開選擇器 → 使用目前目錄確認 → POST /new-agent { cwd }
+    fireEvent.click(await screen.findByRole('button', { name: /使用這個目錄/ }))
+    await waitFor(() => expect(bodyOf('/new-agent')).toEqual({ cwd: 'C:/here' }))
+  })
+
+  it('來源下拉:Claude session 有 title 時,標題顯示第一句、slug 落到副標', async () => {
+    fetchImpl = vi.fn((path: string) => {
+      if (path.startsWith('/sessions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ sessions: [
+        { system: 'claude', file: 'C:/proj/s.jsonl', project: 'C--Users-me-Desktop-proj-chess', cwd: 'C:/Users/me/Desktop/proj-chess', title: '幫我重構登入流程', mtime: Date.now(), subagents: 3, trivial: false },
       ] }) })
       return Promise.resolve({ ok: true })
     }) as unknown as typeof fetchImpl
@@ -95,13 +136,11 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
     fireEvent.click(screen.getByText(/觀察 Claude session/))
-    const item = await screen.findByText('proj/chess')
+    // 標題 = 第一句;slug 出現在副標(點擊會關選單,故先斷言副標再點)
+    const item = await screen.findByText('幫我重構登入流程')
+    expect(screen.getByText(/proj-chess ·/)).toBeInTheDocument()
     fireEvent.click(item)
     expect(bodyOf('/observe')).toEqual({ system: 'claude', file: 'C:/proj/s.jsonl' })
-
-    fireEvent.click(screen.getByRole('button', { name: /切換來源/ }))
-    fireEvent.click(await screen.findByText(/新 Agent/))
-    expect(bodyOf('/new-agent')).toEqual({})
   })
 
   it('來源下拉:選 Antigravity → 帶 system 載入 → 點對話(顯示 identity)→ POST /observe 帶 system', async () => {
@@ -139,5 +178,26 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
     expect(screen.queryByText('Bash: ls')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /幫我做計算機/ }))
     expect(screen.getByText('Bash: ls')).toBeInTheDocument()
+  })
+
+  it('彈窗點「分析合理性」→ POST /analyze 帶 trace → 回傳後顯示判定', async () => {
+    const result = { verdict: 'warn', summary: '有缺口', findings: [{ severity: 'high', step: 1, issue: '風險', suggestion: '先讀檔' }] }
+    fetchImpl = vi.fn((path: string) => {
+      if (path === '/analyze') return Promise.resolve({ ok: true, json: () => Promise.resolve(result) })
+      return Promise.resolve({ ok: true })
+    }) as unknown as typeof fetchImpl
+    renderApp()
+    push(snapshot())
+    push({ type: 'event', seq: 1, event: { kind: 'message', role: 'user', text: '重構登入' } })
+    push({ type: 'event', seq: 2, event: { kind: 'tree:node', node: { id: 'a', parentId: null, type: 'tool', label: 'Grep: password', status: 'done' } } })
+
+    fireEvent.click(screen.getByRole('button', { name: /重構登入/ }))          // 開彈窗
+    fireEvent.click(await screen.findByRole('button', { name: /分析合理性/ }))  // 觸發分析
+
+    const call = fetchImpl.mock.calls.find((c) => c[0] === '/analyze')
+    expect(call).toBeTruthy()
+    expect(JSON.parse((call![1] as RequestInit).body as string).trace.steps).toHaveLength(1)
+    expect(await screen.findByText('有缺口')).toBeInTheDocument()
+    expect(screen.getByText('有疑慮')).toBeInTheDocument()
   })
 })

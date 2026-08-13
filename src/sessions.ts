@@ -1,13 +1,16 @@
 import { existsSync, statSync, readdirSync, openSync, readSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { ANALYSIS_PROMPT_OPENING } from './analyze'
 
 export interface SessionInfo {
   file: string      // 主 .jsonl 絕對路徑
   project: string   // 專案資料夾名(slug)
   cwd: string       // 該 session 的工作目錄(取自逐字稿第一筆)
+  title: string     // 該對話的第一句 user 訊息(清掉指令標籤);抽不到為空字串
   mtime: number     // 最後修改時間(ms)
   subagents: number // subagents/ 內的子檔數
+  trivial: boolean  // 開頭是純指令且沒對專案做任何事 → 前端預設收起
 }
 
 // 列出 ~/.claude/projects 下所有「可觀察」的 session 主檔(排除 subagents/ 內的子檔),
@@ -40,12 +43,23 @@ export function listSessions(root = join(homedir(), '.claude', 'projects')): Ses
       try {
         const st = statSync(file)
         if (!st.isFile()) continue
+        const meta = firstMeta(file)
+        // 略過 /analyze 一次性 query 自己產生的審查逐字稿(第一句就是審查 prompt)。
+        if (meta.title.startsWith(ANALYSIS_PROMPT_OPENING)) continue
+        const subagents = countSubagents(join(dir, name.slice(0, -'.jsonl'.length), 'subagents'))
+        // 只有「指令開頭 + 無 subagent」的候選才掃內容;其餘直接非瑣碎、不掃。
+        const { hasMutation, lines } = meta.isCommand && subagents === 0
+          ? scanActivity(file)
+          : { hasMutation: false, lines: LINE_THRESHOLD }
+        const trivial = classifyTrivial({ isCommand: meta.isCommand, subagents, hasMutation, lines })
         out.push({
           file,
           project,
-          cwd: firstCwd(file),
+          cwd: meta.cwd,
+          title: meta.title,
           mtime: st.mtimeMs,
-          subagents: countSubagents(join(dir, name.slice(0, -'.jsonl'.length), 'subagents')),
+          subagents,
+          trivial,
         })
       } catch (err) {
         console.error(`[sessions] 略過 ${file}:`, err)
@@ -55,29 +69,58 @@ export function listSessions(root = join(homedir(), '.claude', 'projects')): Ses
   return out.sort((a, b) => b.mtime - a.mtime)
 }
 
-// 只讀檔頭(前 64KB)找 cwd:逐字稿開頭常是沒有 cwd 的 summary 記錄,
-// cwd 通常在頭幾筆 user/assistant;限量讀避免掃描 6MB 大檔。
-export function firstCwd(file: string): string {
+// 只讀檔頭(前 256KB)一次撈出 cwd 與「第一句 user 訊息」當標題。
+// cwd 與第一句通常都在檔頭幾筆;限量讀避免掃描 6MB 大檔。兩者都拿到就提早結束。
+export function firstMeta(file: string): { cwd: string; title: string; isCommand: boolean } {
+  let cwd = '', title = '', isCommand = false
   let fd: number | undefined
   try {
     fd = openSync(file, 'r')
-    const buf = Buffer.alloc(65536)
+    const buf = Buffer.alloc(262144)
     const n = readSync(fd, buf, 0, buf.length, 0)
     for (const line of buf.toString('utf8', 0, n).split('\n')) {
       if (!line.trim()) continue
+      let rec: any
       try {
-        const cwd = JSON.parse(line)?.cwd
-        if (typeof cwd === 'string') return cwd
+        rec = JSON.parse(line)
       } catch {
-        // 檔頭最後一行可能被截斷,略過
+        continue // 檔頭最後一行可能被截斷,略過
       }
+      if (!cwd && typeof rec?.cwd === 'string') cwd = rec.cwd
+      if (!title && rec?.type === 'user') {
+        const c = cleanTitle(userText(rec?.message?.content))
+        if (c.title) { title = c.title; isCommand = c.isCommand }
+      }
+      if (cwd && title) break
     }
   } catch (err) {
-    console.error(`[sessions] 讀 cwd 失敗 ${file}:`, err)
+    console.error(`[sessions] 讀檔頭失敗 ${file}:`, err)
   } finally {
     if (fd !== undefined) closeSync(fd)
   }
+  return { cwd, title, isCommand }
+}
+
+// 相容既有呼叫端(transcriptSource 只要 cwd)。
+export function firstCwd(file: string): string {
+  return firstMeta(file).cwd
+}
+
+// user 訊息內容可能是字串或區塊陣列;只取 text 區塊串接。
+function userText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map((b: any) => (b?.type === 'text' ? b.text : '')).join('')
+  }
   return ''
+}
+
+// 清成可讀標題:slash 指令取 <command-name>(顯示成 /init);
+// 其餘去掉 XML 式標籤、壓成單行、截斷 80 字。
+function cleanTitle(raw: string): { title: string; isCommand: boolean } {
+  const cmd = raw.match(/<command-name>([^<]+)<\/command-name>/)
+  if (cmd) return { title: cmd[1].trim(), isCommand: true }
+  return { title: raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80), isCommand: false }
 }
 
 function countSubagents(subDir: string): number {
@@ -87,4 +130,47 @@ function countSubagents(subDir: string): number {
   } catch {
     return 0
   }
+}
+
+// 瑣碎判定門檻:記錄行數低於此值才可能算瑣碎(安全網,續作會超過)。
+export const LINE_THRESHOLD = 40
+
+// 依訊號判定 session 是否「瑣碎」:開頭是純 slash 指令,且之後沒對專案做任何事。
+// 四條同時成立才算瑣碎;任一不成立(有改檔 / 有 subagent / 行數多 / 非指令開頭)即保留。
+export function classifyTrivial(sig: {
+  isCommand: boolean; subagents: number; hasMutation: boolean; lines: number
+}): boolean {
+  return sig.isCommand && sig.subagents === 0 && !sig.hasMutation && sig.lines < LINE_THRESHOLD
+}
+
+const MUTATION_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
+
+// 有界掃描候選檔:只讀檔頭(前 256KB,同 firstMeta),數非空記錄行(達 limit 即停),
+// 並偵測是否用過改檔工具的 tool_use。讀檔或解析失敗印出實際 error,保守回 lines=limit(視為非瑣碎,寧可少摺)。
+export function scanActivity(file: string, limit = LINE_THRESHOLD): { hasMutation: boolean; lines: number } {
+  let lines = 0, hasMutation = false
+  let fd: number | undefined
+  try {
+    fd = openSync(file, 'r')
+    const buf = Buffer.alloc(262144)
+    const n = readSync(fd, buf, 0, buf.length, 0)
+    for (const line of buf.toString('utf8', 0, n).split('\n')) {
+      if (!line.trim()) continue
+      if (++lines >= limit) { lines = limit; break }
+      let rec: any
+      try { rec = JSON.parse(line) } catch { continue }
+      if (rec?.type === 'assistant') {
+        for (const b of rec.message?.content ?? []) {
+          if (b?.type === 'tool_use' && MUTATION_TOOLS.has(b?.name)) { hasMutation = true; break }
+        }
+        if (hasMutation) break
+      }
+    }
+  } catch (err) {
+    console.error(`[sessions] scanActivity 讀檔失敗 ${file}:`, err)
+    return { hasMutation: false, lines: limit }
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+  }
+  return { hasMutation, lines }
 }

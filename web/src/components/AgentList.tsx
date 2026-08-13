@@ -19,7 +19,7 @@ export function AgentList({ entries, onOpen }: { entries: AgentEntry[]; onOpen: 
   return (
     <div className="agent-list">
       {entries.map((e, i) => (
-        <button key={e.key} className="arow" data-status={e.status} onClick={() => onOpen(i)}>
+        <button key={e.key} className="arow" data-status={e.status} onClick={() => onOpen(i)} title={e.title}>
           <span className={`arow-avatar ${e.kind}`}>{e.kind === 'main' ? <BoltIcon /> : <UserIcon />}</span>
           <span className="arow-main">
             <span className="arow-name">

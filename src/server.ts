@@ -5,9 +5,13 @@ import { SessionManager } from './sessionManager'
 import { SourceController } from './sourceController'
 import { ReActAssembler } from './reactAssembler'
 import { makeObserveSource, workspaceFor, listObservableSessions } from './sourceSystems'
+import { listDirs, makeDir } from './dirs'
+import { isLocalHost, isAllowedOrigin, isObservableFile, isCsrfSafe } from './security'
 import type { SourceSystem } from './sourceSystems'
 import { translate } from './translator'
 import { realRunQuery, resolveWorkspace } from './agentAdapter'
+import { runAnalysis } from './analyze'
+import { realAnalyzeQuery } from './analyzeQuery'
 import type { ControlCommand } from './types'
 
 type Packet = { type: 'event'; seq: number; event: unknown }
@@ -45,28 +49,33 @@ export function wireEvents(
   })
 }
 
-export function createServer() {
+// 建 express app(路由 + 中介層),不含 listen / WebSocket,方便用 supertest 測。
+// runQuery 可注入假實作,測試路由時不會真的呼叫 Agent SDK。
+export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
   const app = express()
-  app.use(express.json())
-
-  // Sentinel: Reject requests from unauthorized origins (CORS/CSRF protection)
+  // 放寬 body 上限:大型 agent 的 ReAct trace(如 186 步)JSON 可能超過預設 100KB,
+  // 否則 /analyze 會回 413 → 前端 res.json() 失敗 → 靜默退成一般「分析失敗」。
+  app.use(express.json({ limit: '5mb' }))
+  // 反 DNS rebinding:只服務本機 Host。attacker.com 就算解析到 127.0.0.1,
+  // 瀏覽器仍送 Host: attacker.com → 擋掉(否則可繞過 127.0.0.1 綁定打所有路由)。
   app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-      try {
-        const url = new URL(origin);
-        if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
-          return res.status(403).json({ ok: false, error: 'Origin not allowed' });
-        }
-      } catch (e) {
-        return res.status(403).json({ ok: false, error: 'Invalid origin' });
-      }
+    if (!isLocalHost(req.headers.host)) {
+      console.error('[server] 拒絕非本機 Host:', req.headers.host)
+      return res.status(403).json({ error: 'forbidden host' })
     }
-    next();
-  });
-
+    next()
+  })
+  // 反 CSRF:改狀態請求(POST 等)須來自本機 Origin。顯式擋跨站,不再只靠
+  // express.json 不解析非 JSON body + preflight 的隱性防護(見安全審查)。
+  app.use((req, res, next) => {
+    if (!isCsrfSafe(req.method, req.headers.origin)) {
+      console.error('[server] 拒絕跨站改狀態請求 Origin:', req.headers.origin)
+      return res.status(403).json({ error: 'forbidden origin' })
+    }
+    next()
+  })
   const store = new SnapshotStore()
-  const mgr = new SessionManager({ runQuery: realRunQuery })
+  const mgr = new SessionManager({ runQuery: deps.runQuery ?? realRunQuery })
   const clients = new Set<WebSocket>()
 
   const broadcast = (packet: unknown) => {
@@ -103,13 +112,19 @@ export function createServer() {
     const file = String(req.body?.file ?? '')
     if (!file) return res.status(400).json({ ok: false, error: 'missing file' })
     const system = asSystem(req.body?.system)
+    // 只允許觀察白名單根目錄內的檔(防任意檔讀 / 路徑穿越)。
+    if (!isObservableFile(system, file)) {
+      console.error('[server] /observe 拒絕越界路徑:', file)
+      return res.status(400).json({ ok: false, error: 'file not in allowed directory' })
+    }
     controller.observe(file, (f, emit) => makeObserveSource(system, f, emit), (f) => workspaceFor(system, f))
     res.json({ ok: true })
   })
 
-  // 回到 Route B control 空白狀態(準備開新 agent)。
-  app.post('/new-agent', (_req, res) => {
-    controller.toControl()
+  // 回到 Route B control 空白狀態(準備開新 agent);可帶使用者選的工作目錄。
+  app.post('/new-agent', (req, res) => {
+    const cwd = req.body?.cwd ? String(req.body.cwd) : undefined
+    controller.toControl(cwd)
     res.json({ ok: true })
   })
 
@@ -117,7 +132,7 @@ export function createServer() {
     if (controller.isObserving()) controller.toControl() // 從觀察切回操控,清空畫面
     const prompt = String(req.body?.prompt ?? '')
     emitUserMessage(prompt)
-    mgr.start(prompt)
+    mgr.start(prompt, controller.controlCwd())
     res.json({ ok: true })
   })
 
@@ -132,25 +147,63 @@ export function createServer() {
     res.json({ ok: true })
   })
 
-  const server = app.listen(3001, () => console.log('[server] http on :3001'))
-
-  // Sentinel: Reject connections from unauthorized origins (CSWSH protection)
-  const verifyClient = (info: any, cb: (res: boolean, code?: number, message?: string) => void) => {
-    const origin = info.req.headers.origin;
-    if (origin) {
-      try {
-        const url = new URL(origin);
-        if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
-          return cb(false, 403, 'Forbidden');
-        }
-      } catch (e) {
-        return cb(false, 403, 'Forbidden');
-      }
+  // 合理性分析:把某個 agent 的 ReAct 軌跡交給另一個 Claude 審查(無狀態,不進 store/WS/SessionManager)。
+  app.post('/analyze', async (req, res) => {
+    const trace = req.body?.trace
+    if (!trace || !Array.isArray(trace.steps)) {
+      console.error('[server] /analyze 缺少 trace 或 steps')
+      return res.status(400).json({ error: 'missing trace' })
     }
-    cb(true);
-  };
+    console.log('[server] /analyze', trace.title, trace.steps.length, '步')
+    try {
+      const result = await runAnalysis(trace, realAnalyzeQuery)
+      res.json(result)
+    } catch (err) {
+      console.error('[server] /analyze 失敗:', err)
+      res.status(500).json({ error: String(err) })
+    }
+  })
 
-  const wss = new WebSocketServer({ server, verifyClient })
+  // 目錄瀏覽:列某路徑下的子資料夾(path 省略 = 磁碟根視圖)。給新 Agent 選工作目錄用。
+  app.get('/dirs', (req, res) => {
+    try {
+      res.json(listDirs(String(req.query.path ?? '')))
+    } catch (err) {
+      console.error('[server] /dirs 失敗:', err)
+      res.status(400).json({ error: String(err) })
+    }
+  })
+
+  // 在指定父目錄下建立空資料夾(「建立專案」)。
+  app.post('/mkdir', (req, res) => {
+    try {
+      const parent = String(req.body?.parent ?? '')
+      const name = String(req.body?.name ?? '')
+      res.json({ path: makeDir(parent, name) })
+    } catch (err) {
+      console.error('[server] /mkdir 失敗:', err)
+      res.status(400).json({ error: String(err) })
+    }
+  })
+
+  return { app, clients, controller }
+}
+
+export function createServer() {
+  const { app, clients, controller } = buildApp()
+  // 綁 127.0.0.1(非 0.0.0.0):本機單人工具,/dirs /mkdir /start 等會碰檔案系統與啟動 agent,
+  // 不該對 LAN 開放。WebSocketServer 共用這個 server,一併只聽本機。
+  const server = app.listen(3001, '127.0.0.1', () => console.log('[server] http on 127.0.0.1:3001'))
+  // WS 檢查 Origin:擋掉使用者造訪的惡意網頁背景連上來被動收取 agent 串流
+  // (也擋 rebinding:其 Origin 會是 attacker.com)。非瀏覽器客戶端不送 Origin → 放行。
+  const wss = new WebSocketServer({
+    server,
+    verifyClient: (info: { origin?: string }) => {
+      const ok = isAllowedOrigin(info.origin)
+      if (!ok) console.error('[server] 拒絕 WS 來源:', info.origin)
+      return ok
+    },
+  })
   wss.on('connection', (ws) => {
     clients.add(ws)
     ws.send(JSON.stringify(controller.snapshot()))
