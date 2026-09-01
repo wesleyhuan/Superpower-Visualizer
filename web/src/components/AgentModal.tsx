@@ -3,7 +3,7 @@ import { useModalFocus } from '../hooks/useModalFocus'
 import type { AgentEntry } from '../buildAgentBlocks'
 import { buildAnalysisTrace, classifyKind } from '../buildAgentBlocks'
 import { buildAnalysisRecord, downloadJson } from '../buildAnalysisRecord'
-import type { TreeNode, AnalysisState, AnalysisResult, AnalysisTrace, Verdict, Severity } from '../wireTypes'
+import type { TreeNode, AnalysisState, AnalysisResult, AnalysisTrace, Verdict, Severity, FindingCategory, Finding } from '../wireTypes'
 
 const STATUS_LABEL: Record<string, string> = {
   running: '執行中', awaiting: '等待核准', done: '完成', error: '錯誤', failed: '失敗', interrupted: '已中止',
@@ -32,6 +32,22 @@ const CloseIcon = () => (
 )
 const VERDICT_LABEL: Record<Verdict, string> = { ok: '妥當', warn: '有疑慮', bad: '有問題' }
 const SEV_LABEL: Record<Severity, string> = { high: '高', med: '中', low: '低' }
+const CAT_LABEL: Record<FindingCategory, string> = {
+  danger: '危險操作', redundant: '多餘步驟', missing: '遺漏', better: '更好做法', other: '其他',
+}
+// 分類小圖示(14px,繼承色);other 用泛用圓點,不喧賓奪主。
+const CatIcon = ({ cat }: { cat: FindingCategory }) => {
+  const paths: Record<FindingCategory, string> = {
+    danger: 'M12 3 2 20h20L12 3zM12 10v4M12 17.5v.5',
+    redundant: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
+    missing: 'M12 5v6l4 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z',
+    better: 'M12 3a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 3zM9 22h6',
+    other: 'M12 12h.01',
+  }
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[cat]} /></svg>
+  )
+}
 
 function verdictCount(findings: { severity: Severity }[]): string {
   if (findings.length === 0) return '沒有發現問題'
@@ -71,37 +87,81 @@ function WorkItem({ node, output }: { node: TreeNode; output?: string }) {
   )
 }
 
-function AnalysisPanel({ result, stepLabel, onStep }: {
-  result: AnalysisResult
-  stepLabel: (step: number) => string | undefined
+// 嚴重度堆疊條:高/中/低各佔一段,寬度依數量;全 0 時不畫。
+function SeverityBar({ findings }: { findings: Finding[] }) {
+  const c = { high: 0, med: 0, low: 0 }
+  for (const f of findings) c[f.severity]++
+  const total = c.high + c.med + c.low
+  if (total === 0) return null
+  const seg = (s: Severity, n: number) =>
+    n > 0 ? <i className={`sbar-seg ${s}`} style={{ width: `${(n / total) * 100}%` }} key={s} /> : null
+  return (
+    <span className="sbar" title={`${c.high} 高 · ${c.med} 中 · ${c.low} 低`} aria-hidden="true">
+      {seg('high', c.high)}{seg('med', c.med)}{seg('low', c.low)}
+    </span>
+  )
+}
+
+// 單張指摘卡:嚴重度 + 分類 + 問題 + 建議。就地掛在對應步驟下,或(step 0)放判定帶。
+function FindingCard({ f }: { f: Finding }) {
+  return (
+    <div className={`fin ${f.severity}`}>
+      <div className="fin-top">
+        <span className={`sev ${f.severity}`}>{SEV_LABEL[f.severity]}</span>
+        <span className="fin-cat"><CatIcon cat={f.category} />{CAT_LABEL[f.category]}</span>
+      </div>
+      <div className="f-issue">{f.issue}</div>
+      {f.suggestion && (
+        <div className="f-fix"><span className="fx-ic"><CheckIcon /></span><span>{f.suggestion}</span></div>
+      )}
+    </div>
+  )
+}
+
+// 判定帶:彩色左邊條(依 verdict)+ 總評 + 嚴重度堆疊條 + 無法定位到單一步驟的指摘。
+// overall = step 0(整體性)或超出步數範圍的指摘;放這裡以免它們在就地內嵌設計下消失。
+function VerdictBand({ result, overall }: { result: AnalysisResult; overall: Finding[] }) {
+  return (
+    <div className={`vband ${result.verdict}`}>
+      <div className="vband-top">
+        <div className="summary">{result.summary}</div>
+        <SeverityBar findings={result.findings} />
+      </div>
+      {overall.length > 0 && (
+        <div className="vband-overall">
+          {overall.map((f, i) => <FindingCard f={f} key={i} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 健康條:每步一格,被指摘的步驟依「最高嚴重度」上色 + ! 標記;點格子跳到該步。
+const SEV_RANK: Record<Severity, number> = { low: 1, med: 2, high: 3 }
+function HealthStrip({ steps, worstByStep, onStep }: {
+  steps: number
+  worstByStep: Map<number, Severity>
   onStep: (step: number) => void
 }) {
   return (
-    <div className="analysis">
-      <div className="analysis-head">
-        <span className="lbl">合理性分析</span>
-        <span className="by"><BoltIcon /> Claude 審查</span>
+    <div className="strip">
+      <div className="strip-lbl">步驟健康條 · 點格子跳到該步</div>
+      <div className="cells">
+        {Array.from({ length: steps }, (_, i) => {
+          const step = i + 1
+          const sev = worstByStep.get(step)
+          return (
+            <button
+              key={step}
+              className={`cell${sev ? ` ${sev}` : ''}`}
+              onClick={() => onStep(step)}
+              aria-label={sev ? `步驟 ${step}:${SEV_LABEL[sev]}嚴重度指摘` : `步驟 ${step}`}
+            >
+              {sev && <b>!</b>}
+            </button>
+          )
+        })}
       </div>
-      <div className="summary">{result.summary}</div>
-      {result.findings.length > 0 && (
-        <div className="findings">
-          {result.findings.map((f, i) => (
-            <div className={`finding ${f.severity}`} key={i}>
-              <div className="f-top">
-                <span className={`sev ${f.severity}`}>{SEV_LABEL[f.severity]}</span>
-                {f.step > 0 && (
-                  <button className="f-step" onClick={() => onStep(f.step)}>步驟 {f.step}</button>
-                )}
-                {f.step > 0 && stepLabel(f.step) && <span className="f-action">{stepLabel(f.step)}</span>}
-              </div>
-              <div className="f-issue">{f.issue}</div>
-              {f.suggestion && (
-                <div className="f-fix"><span className="fx-ic"><CheckIcon /></span><span>{f.suggestion}</span></div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -160,7 +220,20 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
     setFlashStep(step)
     setTimeout(() => setFlashStep(null), 1400)
   }
-  const stepLabel = (step: number) => cur.items[step - 1]?.label
+
+  // 依步驟聚合指摘:能對到某步(1..N)的就地掛在該工作項目下,worstByStep 供健康條上色。
+  // 對不到步驟的(step 0 整體性,或模型回傳超出範圍的 step)歸為 overall,放判定帶以免消失。
+  const result = analysis?.status === 'done' ? analysis.result : undefined
+  const stepCount = cur.items.length
+  const findingsByStep = new Map<number, Finding[]>()
+  const worstByStep = new Map<number, Severity>()
+  const overallFindings: Finding[] = []
+  for (const f of result?.findings ?? []) {
+    if (f.step < 1 || f.step > stepCount) { overallFindings.push(f); continue }
+    findingsByStep.set(f.step, [...(findingsByStep.get(f.step) ?? []), f])
+    const worst = worstByStep.get(f.step)
+    if (!worst || SEV_RANK[f.severity] > SEV_RANK[worst]) worstByStep.set(f.step, f.severity)
+  }
 
   return (
     <div className="scrim open" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
@@ -215,8 +288,9 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
         )}
 
         <div className="am-body" ref={bodyRef}>
-          {analysis?.status === 'done' && analysis.result && (
-            <AnalysisPanel result={analysis.result} stepLabel={stepLabel} onStep={scrollToStep} />
+          {result && <VerdictBand result={result} overall={overallFindings} />}
+          {result && worstByStep.size > 0 && (
+            <HealthStrip steps={cur.items.length} worstByStep={worstByStep} onStep={scrollToStep} />
           )}
           {cur.items.length > 0
             ? (
@@ -227,6 +301,7 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
                     <div className={`wstep${flashStep === i + 1 ? ' flash' : ''}`} data-step={i + 1} key={n.id}>
                       {n.reason && <ReasonLine text={n.reason} />}
                       <WorkItem node={n} output={outputByNode[n.id]} />
+                      {(findingsByStep.get(i + 1) ?? []).map((f, j) => <FindingCard f={f} key={j} />)}
                     </div>
                   ))}
                 </div>

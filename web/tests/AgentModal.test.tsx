@@ -85,17 +85,65 @@ describe('AgentModal 合理性分析', () => {
     expect(screen.getByText(/分析中/)).toBeInTheDocument()
   })
 
-  it('done:顯示判定徽章 + 指摘卡(嚴重度/步驟/建議)', () => {
+  it('done:判定徽章 + 總評帶 + 指摘就地掛在對應步驟下(嚴重度/分類/建議)', () => {
     const st: AnalysisState = { status: 'done', result: {
       verdict: 'warn', summary: '方向對但有缺口',
-      findings: [{ severity: 'high', step: 2, issue: '覆寫風險', suggestion: '先讀檔' }],
+      findings: [{ severity: 'high', category: 'danger', step: 2, issue: '覆寫風險', suggestion: '先讀檔' }],
     } }
-    render(<AgentModal {...base} analysisByKey={{ main: st }} onAnalyze={vi.fn()} />)
-    expect(screen.getByText('有疑慮')).toBeInTheDocument()
-    expect(screen.getByText('方向對但有缺口')).toBeInTheDocument()
+    const { container } = render(<AgentModal {...base} analysisByKey={{ main: st }} onAnalyze={vi.fn()} />)
+    expect(screen.getByText('有疑慮')).toBeInTheDocument()          // 動作列徽章
+    expect(screen.getByText('方向對但有缺口')).toBeInTheDocument()   // 判定帶總評
     expect(screen.getByText('覆寫風險')).toBeInTheDocument()
     expect(screen.getByText('先讀檔')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /步驟 2/ })).toBeInTheDocument()
+    expect(screen.getByText('危險操作')).toBeInTheDocument()        // 分類標籤
+    // 指摘就地掛在 step 2(第二個工作項目)之下,而不是頂部清單
+    const step2 = container.querySelector('[data-step="2"]')!
+    expect(step2.querySelector('.fin')).toBeTruthy()
+    expect(step2.querySelector('.fin')!.textContent).toContain('覆寫風險')
+  })
+
+  it('done:健康條每步一格,被指摘的步驟帶嚴重度色', () => {
+    const st: AnalysisState = { status: 'done', result: {
+      verdict: 'bad', summary: 's',
+      findings: [{ severity: 'high', category: 'danger', step: 2, issue: 'i', suggestion: 'x' }],
+    } }
+    const { container } = render(<AgentModal {...base} analysisByKey={{ main: st }} onAnalyze={vi.fn()} />)
+    const cells = container.querySelectorAll('.strip .cell')
+    expect(cells).toHaveLength(2)                        // 2 步 → 2 格
+    expect(cells[0].className).not.toContain('high')
+    expect(cells[1].className).toContain('high')         // step 2 被指摘
+  })
+
+  it('done:整體性指摘(step 0)顯示在判定帶,不掛任何步驟', () => {
+    const st: AnalysisState = { status: 'done', result: {
+      verdict: 'warn', summary: '整體評語',
+      findings: [{ severity: 'med', category: 'missing', step: 0, issue: '整體缺測試', suggestion: '補測試' }],
+    } }
+    const { container } = render(<AgentModal {...base} analysisByKey={{ main: st }} onAnalyze={vi.fn()} />)
+    expect(container.querySelector('.vband')!.textContent).toContain('整體缺測試')
+    // 沒有 step>0 指摘 → 不顯示健康條
+    expect(container.querySelector('.strip')).toBeNull()
+    // 也不會誤掛到任何工作項目
+    expect(container.querySelector('.work .fin')).toBeNull()
+  })
+
+  it('done:超出步數範圍的 step → 歸入判定帶,不遺失、不誤掛', () => {
+    const st: AnalysisState = { status: 'done', result: {
+      verdict: 'bad', summary: 's',
+      findings: [{ severity: 'high', category: 'danger', step: 99, issue: '越界指摘', suggestion: 'x' }],
+    } }
+    const { container } = render(<AgentModal {...base} analysisByKey={{ main: st }} onAnalyze={vi.fn()} />)
+    expect(container.querySelector('.vband')!.textContent).toContain('越界指摘')  // 落在判定帶
+    expect(container.querySelector('.strip')).toBeNull()                          // 對不到步 → 無健康條
+    expect(container.querySelector('.work .fin')).toBeNull()                      // 不誤掛工作項目
+  })
+
+  it('done:無指摘(妥當)→ 有總評、無健康條、無指摘卡', () => {
+    const st: AnalysisState = { status: 'done', result: { verdict: 'ok', summary: '一切妥當', findings: [] } }
+    const { container } = render(<AgentModal {...base} analysisByKey={{ main: st }} onAnalyze={vi.fn()} />)
+    expect(screen.getByText('一切妥當')).toBeInTheDocument()
+    expect(container.querySelector('.strip')).toBeNull()
+    expect(container.querySelector('.fin')).toBeNull()
   })
 
   it('空 items:分析按鈕停用', () => {

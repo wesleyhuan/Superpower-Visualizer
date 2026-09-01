@@ -10,9 +10,9 @@ const trace: AnalysisTrace = {
 const result: AnalysisResult = {
   verdict: 'warn',
   summary: '還行',
-  findings: [{ severity: 'high', step: 1, issue: 'i', suggestion: 's' }],
+  findings: [{ severity: 'high', category: 'danger', step: 1, issue: 'i', suggestion: 's' }],
   reviewerModel: 'claude-opus-4-8',
-  promptVersion: 'v1',
+  promptVersion: 'v2',
 }
 const at = new Date('2026-07-28T00:00:00.000Z')
 
@@ -22,7 +22,7 @@ describe('buildAnalysisRecord', () => {
     expect(rec.schemaVersion).toBe(1)
     expect(rec.capturedAt).toBe('2026-07-28T00:00:00.000Z')
     expect(rec.reviewerModel).toBe('claude-opus-4-8')
-    expect(rec.promptVersion).toBe('v1')
+    expect(rec.promptVersion).toBe('v2')
     expect(rec.trace).toEqual(trace)
   })
 

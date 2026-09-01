@@ -70,7 +70,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sa
 .icon-btn:focus-visible, .badge-await:focus-visible, .arow:focus-visible,
 .subchip:focus-visible, .am-navbtn:focus-visible, .am-close:focus-visible,
 .btn:focus-visible, .analyze-btn:focus-visible, .reanalyze:focus-visible,
-.f-step:focus-visible, .wpick-row:focus-visible, .wpick-new button:focus-visible {
+.cell:focus-visible, .wpick-row:focus-visible, .wpick-new button:focus-visible {
   outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
@@ -270,25 +270,46 @@ svg { display: block; }
 .reanalyze { margin-left: auto; font: inherit; font-size: 12px; font-weight: 550; color: var(--accent); background: none; border: none; cursor: pointer; }
 .reanalyze:hover { text-decoration: underline; }
 
-.analysis { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 14px; min-width: 0; }
-.analysis-head { display: flex; align-items: center; gap: 8px; padding: 11px 13px; border-bottom: 1px solid var(--border); }
-.analysis-head .lbl { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); margin: 0; }
-.analysis-head .by { margin-left: auto; font-size: 10.5px; color: var(--fg-muted); font-family: var(--mono); display: inline-flex; align-items: center; gap: 5px; }
-.summary { padding: 12px 14px; font-size: 13.5px; line-height: 1.6; color: var(--fg); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-.findings { display: flex; flex-direction: column; }
-.finding { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 13px; border-left: 3px solid var(--st-idle); min-width: 0; }
-.finding + .finding { border-top: 1px solid var(--border); }
-.finding.high { border-left-color: var(--st-error); }
-.finding.med  { border-left-color: var(--st-awaiting); }
-.finding.low  { border-left-color: var(--st-running); }
-.f-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* 判定帶:彩色左邊條(依 verdict)+ 總評 + 嚴重度堆疊條 + 整體性(step 0)指摘 */
+.vband { border: 1px solid var(--border); border-left-width: 4px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 12px; min-width: 0; }
+.vband.ok   { border-left-color: var(--st-done);     background: color-mix(in srgb, var(--st-done) 7%, var(--surface)); }
+.vband.warn { border-left-color: var(--st-awaiting); background: color-mix(in srgb, var(--st-awaiting) 7%, var(--surface)); }
+.vband.bad  { border-left-color: var(--st-error);    background: color-mix(in srgb, var(--st-error) 7%, var(--surface)); }
+.vband-top { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.summary { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.6; color: var(--fg); overflow-wrap: anywhere; }
+.sbar { display: flex; flex: none; width: 84px; height: 7px; border-radius: 999px; overflow: hidden; background: var(--surface-2); margin-top: 4px; }
+.sbar-seg { display: block; height: 100%; }
+.sbar-seg.high { background: var(--st-error); }
+.sbar-seg.med  { background: var(--st-awaiting); }
+.sbar-seg.low  { background: var(--st-running); }
+.vband-overall { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 12px; }
+
+/* 步驟健康條:每步一格,被指摘的步驟依最高嚴重度上色 + ! 標記 */
+.strip { padding: 10px 12px 12px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.strip-lbl { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); margin-bottom: 8px; }
+.cells { display: flex; gap: 3px; }
+.cell { flex: 1 1 4px; min-width: 5px; height: 26px; border-radius: 5px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; position: relative; padding: 0; transition: transform .1s; }
+.cell:hover { transform: translateY(-2px); }
+.cell.high { background: var(--st-error-bg);    border-color: color-mix(in srgb, var(--st-error) 55%, transparent); }
+.cell.med  { background: var(--st-awaiting-bg); border-color: color-mix(in srgb, var(--st-awaiting) 55%, transparent); }
+.cell.low  { background: var(--st-running-bg);  border-color: color-mix(in srgb, var(--st-running) 55%, transparent); }
+.cell b { position: absolute; top: -5px; right: -3px; width: 12px; height: 12px; border-radius: 50%; font-size: 9px; font-weight: 700; line-height: 12px; color: var(--accent-fg); }
+.cell.high b { background: var(--st-error); }
+.cell.med  b { background: var(--st-awaiting); }
+.cell.low  b { background: var(--st-running); }
+
+/* 指摘卡:就地掛在對應步驟下(或 step 0 掛判定帶) */
+.fin { border: 1px solid var(--border); border-left: 3px solid var(--st-idle); border-radius: 0 8px 8px 0; margin: 4px 8px 6px 26px; padding: 9px 12px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; background: var(--surface); }
+.vband-overall .fin { margin: 0; }
+.fin.high { border-left-color: var(--st-error); }
+.fin.med  { border-left-color: var(--st-awaiting); }
+.fin.low  { border-left-color: var(--st-running); }
+.fin-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fin-cat { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--fg-muted); }
 .sev { font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 5px; flex: none; }
 .sev.high { color: var(--st-error);    background: var(--st-error-bg); }
 .sev.med  { color: var(--st-awaiting); background: var(--st-awaiting-bg); }
 .sev.low  { color: var(--st-running);  background: var(--st-running-bg); }
-.f-step { font-size: 11px; font-weight: 600; color: var(--fg-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; flex: none; cursor: pointer; font-family: inherit; }
-.f-step:hover { border-color: var(--accent); color: var(--accent); }
-.f-action { font-family: var(--mono); font-size: 11px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .f-issue { font-size: 13px; color: var(--fg); line-height: 1.55; overflow-wrap: anywhere; }
 .f-fix { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; color: var(--fg-muted); line-height: 1.55; overflow-wrap: anywhere; }
 .f-fix .fx-ic { color: var(--st-done); flex: none; margin-top: 1px; }

@@ -55,8 +55,11 @@ export interface AnalysisTrace {
 }
 export type Verdict = 'ok' | 'warn' | 'bad'   // 妥當 / 有疑慮 / 有問題
 export type Severity = 'high' | 'med' | 'low'
+// 指摘分類:危險操作 / 多餘步驟 / 遺漏 / 更好做法 / 其他(列舉固定,前端顯示對應標籤+圖示)
+export type FindingCategory = 'danger' | 'redundant' | 'missing' | 'better' | 'other'
 export interface Finding {
   severity: Severity
+  category: FindingCategory
   step: number       // 對應 AnalysisStep.index;0 = 整體性問題,不指向單一步
   issue: string
   suggestion: string
