@@ -181,7 +181,7 @@ describe('App 整合流程(假 WebSocket 驅動)', () => {
   })
 
   it('彈窗點「分析合理性」→ POST /analyze 帶 trace → 回傳後顯示判定', async () => {
-    const result = { verdict: 'warn', summary: '有缺口', findings: [{ severity: 'high', step: 1, issue: '風險', suggestion: '先讀檔' }] }
+    const result = { verdict: 'warn', summary: '有缺口', findings: [{ severity: 'high', category: 'danger', step: 1, issue: '風險', suggestion: '先讀檔' }] }
     fetchImpl = vi.fn((path: string) => {
       if (path === '/analyze') return Promise.resolve({ ok: true, json: () => Promise.resolve(result) })
       return Promise.resolve({ ok: true })

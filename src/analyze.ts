@@ -1,11 +1,12 @@
-import type { AnalysisTrace, AnalysisResult, Verdict, Severity, Finding } from './types'
+import type { AnalysisTrace, AnalysisResult, Verdict, Severity, Finding, FindingCategory } from './types'
 
 // 審查 prompt 的開頭句。也用來把「/analyze 自己產生的」session 從觀察清單過濾掉
 // (見 sessions.ts):prompt 與過濾共用同一字串,避免日後改字走鐘。
 export const ANALYSIS_PROMPT_OPENING = '你是一位資深工程師,正在審查「另一個 AI agent」完成任務的過程是否合理。'
 
 // 審核 prompt 的版本。改動 buildAnalysisPrompt 的內容/schema 時 bump,匯出的評估記錄可據此重現。
-export const ANALYSIS_PROMPT_VERSION = 'v1'
+// v2:findings 新增 category 分類欄位。
+export const ANALYSIS_PROMPT_VERSION = 'v2'
 
 // 把一個 agent 的 ReAct 軌跡組成給「審查用 Claude」的 prompt。
 // 要求:只回 JSON、schema 固定、語言繁中。
@@ -30,6 +31,8 @@ export function buildAnalysisPrompt(trace: AnalysisTrace): string {
     '  "summary": "繁體中文總評,2-4 句",',
     '  "findings": [',
     '    { "severity": "high" | "med" | "low", "step": <步驟編號,整體性問題填 0>,',
+    '      "category": "danger" | "redundant" | "missing" | "better" | "other",',
+    '        // danger=危險操作 / redundant=多餘步驟 / missing=遺漏 / better=更好做法 / other=其他',
     '      "issue": "問題是什麼", "suggestion": "建議怎麼改" }',
     '  ]   // 沒問題就給空陣列',
     '}',
@@ -39,6 +42,7 @@ export function buildAnalysisPrompt(trace: AnalysisTrace): string {
 
 const VERDICTS: Verdict[] = ['ok', 'warn', 'bad']
 const SEVERITIES: Severity[] = ['high', 'med', 'low']
+const CATEGORIES: FindingCategory[] = ['danger', 'redundant', 'missing', 'better', 'other']
 
 // 解析/查詢失敗時的統一 warn 結果(不拋例外,讓 UI 優雅顯示)。
 const warnResult = (summary: string): AnalysisResult => ({ verdict: 'warn', summary, findings: [] })
@@ -67,6 +71,7 @@ export function parseVerdict(text: string): AnalysisResult {
 function normalizeFinding(f: any): Finding {
   return {
     severity: SEVERITIES.includes(f?.severity) ? f.severity : 'low',
+    category: CATEGORIES.includes(f?.category) ? f.category : 'other',
     step: Number.isFinite(f?.step) ? Number(f.step) : 0,
     issue: typeof f?.issue === 'string' ? f.issue : '',
     suggestion: typeof f?.suggestion === 'string' ? f.suggestion : '',

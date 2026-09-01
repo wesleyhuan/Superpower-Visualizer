@@ -26,6 +26,13 @@ describe('buildAnalysisPrompt', () => {
     expect(p).toContain('findings')
     expect(p).toContain('繁體中文')
   })
+  it('schema 含 category 分類與所有列舉鍵', () => {
+    const p = buildAnalysisPrompt(trace)
+    expect(p).toContain('category')
+    for (const key of ['danger', 'redundant', 'missing', 'better', 'other']) {
+      expect(p).toContain(key)
+    }
+  })
 })
 
 describe('parseVerdict', () => {
@@ -56,6 +63,15 @@ describe('parseVerdict', () => {
     const r = parseVerdict('{"verdict":"bad","summary":"s","findings":[{"severity":"med","step":1}]}')
     expect(r.findings[0].issue).toBe('')
     expect(r.findings[0].suggestion).toBe('')
+  })
+  it('category 正常解析', () => {
+    const r = parseVerdict('{"verdict":"bad","summary":"s","findings":[{"severity":"high","step":2,"issue":"i","suggestion":"s","category":"danger"}]}')
+    expect(r.findings[0].category).toBe('danger')
+  })
+  it('category 非列舉或缺漏 → other', () => {
+    const r = parseVerdict('{"verdict":"warn","summary":"s","findings":[{"severity":"low","step":1,"issue":"i","suggestion":"s","category":"nonsense"},{"severity":"low","step":1,"issue":"i","suggestion":"s"}]}')
+    expect(r.findings[0].category).toBe('other')
+    expect(r.findings[1].category).toBe('other')
   })
 })
 
