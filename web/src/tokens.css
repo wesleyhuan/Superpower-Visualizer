@@ -66,6 +66,13 @@ body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sa
 .workspace { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; color: var(--fg-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 4px 9px; max-width: 40ch; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--fg-muted); display: grid; place-items: center; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
 .icon-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+/* 弱化的次要控制群:狀態燈 + 工作目錄圖示 + 主題切換 */
+.topbar-tools { display: inline-flex; align-items: center; gap: 8px; }
+.conn-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--st-idle); }
+.conn-dot.live { background: var(--st-done); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-done) 20%, transparent); }
+.conn-dot.off { background: var(--st-error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-error) 20%, transparent); }
+.ws-icon { cursor: default; }
+.ws-icon:hover { color: var(--fg-muted); border-color: var(--border); }
 /* 鍵盤可及性:全站互動控制的統一焦點環(與 input / source-item 一致) */
 .icon-btn:focus-visible, .badge-await:focus-visible, .arow:focus-visible,
 .subchip:focus-visible, .am-navbtn:focus-visible, .am-close:focus-visible,
@@ -76,7 +83,9 @@ body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sa
 
 .ended-banner { display: flex; align-items: center; gap: 8px; padding: 9px 13px; border-radius: 9px; background: var(--st-error-bg); color: var(--st-error); border: 1px solid color-mix(in srgb, var(--st-error) 35%, transparent); font-size: 13px; font-weight: 550; }
 
-.main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
+/* 版面層級:Agents 收成較窄的側欄,對話取得主要空間、成為視覺主角
+   (class 用 app-main,避免與 kind 修飾字 .main —— 如 .ab-kind.main —— 撞名) */
+.app-main { display: grid; grid-template-columns: minmax(300px, 340px) 1fr; gap: 12px; min-height: 0; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .panel-head { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); flex: none; }
 .panel-head h2 { font-size: 12px; font-weight: 650; margin: 0; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-muted); }
@@ -209,7 +218,7 @@ details.dump pre { margin: 6px 0 0; padding: 9px 11px; background: var(--surface
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 @keyframes beacon { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--st-awaiting) 55%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
 @media (prefers-reduced-motion: reduce) { .st-dot.running, .modal-head .ring { animation: none; } }
-@media (max-width: 820px) { .main { grid-template-columns: 1fr; } .workspace { display: none; } }
+@media (max-width: 820px) { .app-main { grid-template-columns: 1fr; } .workspace { display: none; } }
 svg { display: block; }
 
 /* 來源切換下拉(Route A 觀察 / Route B 操控) */
