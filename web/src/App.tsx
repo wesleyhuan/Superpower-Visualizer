@@ -97,20 +97,23 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
         {state.pending.length > 0 && (
           <span className="badge-await"><span className="bdot" /> {state.pending.length} 待核准</span>
         )}
-        <span className="pill"><span className={`dot ${connected ? 'live' : 'off'}`} /> {connected ? '已連線' : '連線中…'}</span>
-        {state.workspace && (
-          <span className="workspace" title={state.workspace}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-            {state.workspace}
-          </span>
-        )}
-        <button className="icon-btn" onClick={toggleTheme} aria-label="切換深淺主題" title="切換深淺主題">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={theme === 'dark' ? SunPath : MoonPath} /></svg>
-        </button>
+        {/* 次要控制收進一個弱化的工具列:連線只留一顆狀態燈、工作目錄只留圖示(路徑進 tooltip) */}
+        <div className="topbar-tools">
+          <span className={`conn-dot ${connected ? 'live' : 'off'}`}
+            role="img" title={connected ? '已連線' : '連線中…'} aria-label={connected ? '已連線' : '連線中…'} />
+          {state.workspace && (
+            <span className="icon-btn ws-icon" role="img" title={state.workspace} aria-label={`工作目錄:${state.workspace}`}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+            </span>
+          )}
+          <button className="icon-btn" onClick={toggleTheme} aria-label="切換深淺主題" title="切換深淺主題">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={theme === 'dark' ? SunPath : MoonPath} /></svg>
+          </button>
+        </div>
       </header>
 
       {/* MAIN */}
-      <main className="main">
+      <main className="app-main">
         <section className="panel">
           <div className="panel-head">
             <h2>Agents</h2>
