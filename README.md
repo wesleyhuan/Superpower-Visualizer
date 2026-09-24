@@ -72,7 +72,7 @@ npm run dev
 cd web && npm run dev
 ```
 
-Open <http://localhost:5173>; a green 🟢 "connected" in the top-right means the backend is wired up.
+Open <http://localhost:5173>; a green 🟢 status dot in the top-right (hover for "connected") means the backend is wired up.
 
 **To stop:** `Ctrl+C` in each terminal. If a port is stuck (EADDRINUSE :3001), find and kill the
 leftover process:
@@ -103,7 +103,8 @@ The **"source"** dropdown in the top-right decides which mode you're in:
 
 **Setting the agent's working directory:** it operates in `process.cwd()` by default (the directory
 you ran `npm run dev` from). To point it at **another** project, set `AGENT_WORKSPACE` (relative paths
-for Read / Write / Bash resolve against it); the header shows the current working directory:
+for Read / Write / Bash resolve against it); the header's folder icon shows the current working
+directory in its tooltip:
 
 ```bash
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
