@@ -74,6 +74,13 @@ export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
     }
     next()
   })
+  // 安全 Headers (Clickjacking 防護、MIME sniffing 防護)
+  app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:3001 ws://localhost:3001;")
+    next()
+  })
   const store = new SnapshotStore()
   const mgr = new SessionManager({ runQuery: deps.runQuery ?? realRunQuery })
   const clients = new Set<WebSocket>()

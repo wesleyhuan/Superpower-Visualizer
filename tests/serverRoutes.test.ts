@@ -35,6 +35,13 @@ describe('server 路由:安全中介層', () => {
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.sessions)).toBe(true)
   })
+
+  it('回應包含安全 Headers (CSP, X-Frame-Options 等)', async () => {
+    const res = await request(app()).get('/sessions')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['x-content-type-options']).toBe('nosniff')
+    expect(res.headers['content-security-policy']).toMatch(/default-src 'self'/)
+  })
 })
 
 describe('server 路由:/observe 白名單', () => {
