@@ -263,6 +263,12 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
               </span>
             </>
           )}
+          {analysis?.status === 'error' && (
+            <>
+              <span className="analyze-hint">分析失敗,請再試一次。</span>
+              <button className="reanalyze" onClick={doAnalyze}>重新分析</button>
+            </>
+          )}
           {analysis?.status === 'loading' && (
             <span className="analyze-loading"><span className="spin" /> 分析中…</span>
           )}
@@ -270,8 +276,11 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
             <div className="verdict">
               <span className={`vbadge ${analysis.result.verdict}`}>{VERDICT_LABEL[analysis.result.verdict]}</span>
               <span className="vcount">{verdictCount(analysis.result.findings)}</span>
-              <button className="reanalyze" onClick={() => doExport(analysis.result!)}>匯出 JSON</button>
-              <button className="reanalyze" onClick={doAnalyze}>重新分析</button>
+              {/* 兩個動作包成一組:窄螢幕換行時一起換到下一行,不會被拆開或擠出視窗 */}
+              <span className="verdict-actions">
+                <button className="reanalyze" onClick={() => doExport(analysis.result!)}>匯出 JSON</button>
+                <button className="reanalyze" onClick={doAnalyze}>重新分析</button>
+              </span>
             </div>
           )}
         </div>
