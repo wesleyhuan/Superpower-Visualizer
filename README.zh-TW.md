@@ -62,7 +62,7 @@ npm run dev
 cd web && npm run dev
 ```
 
-瀏覽器開 <http://localhost:5173>,標題列右上出現 🟢「已連線」即代表接上後端。
+瀏覽器開 <http://localhost:5173>,標題列右上出現 🟢 綠色狀態燈(滑過顯示「已連線」)即代表接上後端。
 
 **停止:** 在各自的終端按 `Ctrl+C`。若 port 被占住(EADDRINUSE :3001),先找出並砍掉殘留行程:
 
@@ -86,7 +86,7 @@ powershell -Command "Stop-Process -Id <PID> -Force"
 5. 「暫停」中止目前執行;啟動後在輸入框再打字送出 = **派新任務**(排進 agent 輸入佇列)。
 
 **指定 agent 的工作目錄:** 預設在 `process.cwd()`(啟動 `npm run dev` 的目錄)操作。要它在**別的**專案動手,
-用 `AGENT_WORKSPACE` 指過去(Read / Write / Bash 的相對路徑都以它為基準),標題列會顯示目前工作目錄:
+用 `AGENT_WORKSPACE` 指過去(Read / Write / Bash 的相對路徑都以它為基準),標題列的資料夾圖示會在 tooltip 顯示目前工作目錄:
 
 ```bash
 AGENT_WORKSPACE="D:/path/to/target-project" npm run dev
