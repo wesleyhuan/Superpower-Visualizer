@@ -7,6 +7,7 @@ import { Conversation } from './components/Conversation'
 import { ApprovalModal } from './components/ApprovalModal'
 import { SourcePicker } from './components/SourcePicker'
 import { WorkspacePicker } from './components/WorkspacePicker'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import type { LogEntry, AnalysisTrace, AnalysisState } from './wireTypes'
 
 type Theme = 'light' | 'dark'
@@ -35,7 +36,7 @@ const SunPath = 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5 19 19M3 12h2M19 12h2M5 19
 const MoonPath = 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z'
 
 export function App({ deps }: { deps?: SessionDeps } = {}) {
-  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions, analyze, loadDirs, makeDir } = useSession(deps)
+  const { state, connected, notice, dismissNotice, pause, approve, followup, start, observe, newAgent, loadSessions, analyze, loadDirs, makeDir } = useSession(deps)
   const [theme, toggleTheme] = useTheme()
   const [draft, setDraft] = useState('')
   const isObserving = state.mode === 'observe'
@@ -171,6 +172,17 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
       </main>
 
       {openIndex !== null && openIndex < entries.length && (
+        // 視窗內容(尤其分析結果)出錯時只換掉這個視窗,不讓整頁白屏;關閉後可再開。
+        <ErrorBoundary fallback={(error, reset) => (
+          <div className="scrim open">
+            <div className="agent-modal crash" role="alertdialog" aria-label="視窗發生錯誤">
+              <h2>這個視窗無法顯示</h2>
+              <p>資料格式出乎預期,已停止顯示這個 agent 的詳細內容。其他畫面不受影響。</p>
+              <pre>{error.message}</pre>
+              <button className="btn btn-primary" onClick={() => { reset(); setOpenIndex(null) }}>關閉</button>
+            </div>
+          </div>
+        )}>
         <AgentModal
           entries={entries}
           index={openIndex}
@@ -180,6 +192,13 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
           onIndex={setOpenIndex}
           onClose={() => setOpenIndex(null)}
         />
+        </ErrorBoundary>
+      )}
+      {notice && (
+        <div className="notice" role="alert">
+          <span>{notice}</span>
+          <button className="notice-close" onClick={dismissNotice} aria-label="關閉提示">×</button>
+        </div>
       )}
       <ApprovalModal pending={state.pending} onDecide={approve} />
       {pickerOpen && (

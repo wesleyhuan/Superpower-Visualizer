@@ -79,6 +79,14 @@ describe('AgentModal 合理性分析', () => {
     expect(trace.steps).toHaveLength(2)
   })
 
+  it('error:顯示失敗提示與「重新分析」,按下會再分析一次', () => {
+    const onAnalyze = vi.fn()
+    render(<AgentModal {...base} analysisByKey={{ main: { status: 'error' } }} onAnalyze={onAnalyze} />)
+    expect(screen.getByText(/分析失敗/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重新分析' }))
+    expect(onAnalyze).toHaveBeenCalledTimes(1)
+  })
+
   it('loading:顯示分析中', () => {
     const st: AnalysisState = { status: 'loading' }
     render(<AgentModal {...base} analysisByKey={{ main: st }} onAnalyze={vi.fn()} />)
