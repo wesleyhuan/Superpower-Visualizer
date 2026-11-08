@@ -26,9 +26,12 @@ export function AgentList({ entries, onOpen }: { entries: AgentEntry[]; onOpen: 
               <span className={`ab-kind ${e.kind}`}>{e.kind === 'main' ? '主 AGENT' : 'SUBAGENT'}</span>
               <span className="arow-title">{e.title}</span>
             </span>
-            <span className={`arow-chip ${e.status}`}><span className={`st-dot ${e.status}`} />{STATUS_LABEL[e.status] ?? e.status}</span>
+            {/* 狀態與步數放同一行(第二行),讓標題拿到整行寬度——側欄變窄後標題才不會被擠成「Fix …」 */}
+            <span className="arow-sub">
+              <span className={`arow-chip ${e.status}`}><span className={`st-dot ${e.status}`} />{STATUS_LABEL[e.status] ?? e.status}</span>
+              <span className="arow-meta">{e.steps} 步{e.subKeys.length > 0 ? ` · ${e.subKeys.length} subagent` : ''}</span>
+            </span>
           </span>
-          <span className="arow-meta">{e.steps} 步{e.subKeys.length > 0 ? ` · ${e.subKeys.length} subagent` : ''}</span>
           <span className="arow-go"><GoIcon /></span>
         </button>
       ))}

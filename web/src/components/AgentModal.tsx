@@ -281,7 +281,7 @@ export function AgentModal({ entries, index, outputByNode, analysisByKey, onAnal
             <span className="am-subs-label">指派的 subagent</span>
             {subs.map(({ i, entry }) => (
               <button key={entry.key} className="subchip" onClick={() => onIndex(i)}>
-                <span className={`st-dot ${entry.status}`} />{entry.title}
+                <span className={`st-dot ${entry.status}`} /><span className="subchip-title">{entry.title}</span>
               </button>
             ))}
           </div>
