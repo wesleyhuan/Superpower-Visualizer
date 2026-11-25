@@ -72,7 +72,9 @@ npm run dev
 cd web && npm run dev
 ```
 
-Open <http://localhost:5173>; a green 🟢 "connected" in the top-right means the backend is wired up.
+On startup the backend prints `用這個網址開啟介面: http://localhost:5173/?token=…`. **Open that URL**; a green 🟢 "connected" in the top-right means the backend is wired up.
+
+> **Why a token?** The backend can start an agent and approve arbitrary commands. Origin checks only stop web pages; any local process that skips the Origin header could call the API. So the backend generates a random token on every launch, and every HTTP request (`x-sv-token` header) and WebSocket (`?token=`) must carry it. The frontend moves the token from the URL into sessionStorage, so reloads work; after a backend restart, open the newly printed URL. To pin the token (e.g. for scripts), set `SV_TOKEN=<value>` before starting.
 
 **To stop:** `Ctrl+C` in each terminal. If a port is stuck (EADDRINUSE :3001), find and kill the
 leftover process:
@@ -184,8 +186,8 @@ the chat).
 ## Tests
 
 ```bash
-npm test            # backend unit tests (vitest, 136)
-cd web && npm test  # frontend unit tests (vitest + jsdom, 86)
+npm test            # backend unit tests (vitest, 160)
+cd web && npm test  # frontend unit tests (vitest + jsdom, 93)
 ```
 
 Type-check: `npx tsc --noEmit` (in the root and `web/` separately).
@@ -193,8 +195,8 @@ Type-check: `npx tsc --noEmit` (in the root and `web/` separately).
 ## End-to-end check
 
 ```bash
-# Start the backend first (npm run dev), then in another terminal:
-npx tsx spike/e2e.ts
+# Start the backend with a fixed token (SV_TOKEN=dev npm run dev), then in another terminal:
+SV_TOKEN=dev npx tsx spike/e2e.ts
 ```
 
 `spike/e2e.ts` simulates the frontend running the full loop: connect WS → `/start` → auto-approve on

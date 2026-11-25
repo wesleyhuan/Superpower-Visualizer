@@ -4,13 +4,15 @@
 import { WebSocket } from 'ws'
 
 const HTTP = 'http://localhost:3001'
-const WS_URL = 'ws://localhost:3001'
+// 後端需要存取 token:用 SV_TOKEN=xxx 啟動後端,這裡也帶同一個 SV_TOKEN。
+const TOKEN = process.env.SV_TOKEN ?? ''
+const WS_URL = `ws://localhost:3001/?token=${encodeURIComponent(TOKEN)}`
 const t0 = Date.now()
 const ms = () => `+${((Date.now() - t0) / 1000).toFixed(1)}s`
 
 async function post(path: string, body: unknown) {
   const res = await fetch(HTTP + path, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-sv-token': TOKEN }, body: JSON.stringify(body),
   })
   console.log(`[pause-e2e] ${ms()} POST ${path} →`, res.status)
 }

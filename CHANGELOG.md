@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Session 正確性與本機存取 token
+
+- **重複 `/start` 不再開第二個 session**:每次 `start()` 建一個獨立的 session 物件(自己的 inbox / pending / AbortController);已有 session 在跑時 `start()` 回 `false`、`/start` 回 409。`/new-agent` 會先 `pause()` 舊 session;沒有 session 時的 followup 回 409,不再偷偷排進下一個 session。
+- **核准時把原始 input 傳回 SDK**:`approveTool` 改回傳 `{ behavior: 'allow', updatedInput: <原本的工具參數> }`(原本是 `undefined`)。
+- **pause 後舊迴圈不能寫進新 session**:舊 session 被新 session 取代後,其晚到的訊息與錯誤一律丟棄;舊 session 停止後再問權限直接 deny;停在等輸入的 iterator 會收到 `done`。
+- **本機存取 token**:後端每次啟動產生隨機 token(可用 `SV_TOKEN` 固定),所有 HTTP 請求須帶 `x-sv-token`、WebSocket 須帶 `?token=`,否則 401 / 握手失敗。擋掉不送 Origin 的本機程式直接呼叫 `/start`、`/control approve`、`/mkdir`。前端從網址讀 token、存 sessionStorage 並清掉網址列。
+- 後端測試 136 → 160、前端測試 87 → 93。
+
 ### 合理性分析 UI 改版(視覺化)
 
 把「⚖ 分析合理性」的結果從「頂部一份純文字清單」改造成「一張可掃視的地圖」:

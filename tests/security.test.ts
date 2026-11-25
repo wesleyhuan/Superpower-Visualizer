@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { join, resolve } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { mkdtempSync, writeFileSync, symlinkSync, realpathSync } from 'node:fs'
-import { isLocalHost, isAllowedOrigin, isObservableFile, isCsrfSafe, isUnderRoot } from '../src/security'
+import { isLocalHost, isAllowedOrigin, isObservableFile, isCsrfSafe, isUnderRoot, isValidToken, makeToken, tokenFromUrl } from '../src/security'
 
 describe('isLocalHost(反 DNS rebinding)', () => {
   it('本機 hostname(含各種 port)→ true', () => {
@@ -91,5 +91,29 @@ describe('isObservableFile(觀察檔白名單,防任意檔讀)', () => {
   })
   it('空路徑 → false', () => {
     expect(isObservableFile('claude', '')).toBe(false)
+  })
+})
+
+describe('本機存取 token', () => {
+  it('makeToken:沒設環境變數 → 64 字元 hex 隨機值,每次不同', () => {
+    const a = makeToken(undefined)
+    expect(a).toMatch(/^[0-9a-f]{64}$/)
+    expect(makeToken(undefined)).not.toBe(a)
+  })
+  it('makeToken:SV_TOKEN 有值就用它', () => {
+    expect(makeToken(' fixed ')).toBe('fixed')
+  })
+  it('isValidToken:只有完全相同才通過', () => {
+    expect(isValidToken('abc', 'abc')).toBe(true)
+    expect(isValidToken('abc', 'abd')).toBe(false)
+    expect(isValidToken('abc', 'ab')).toBe(false)
+    expect(isValidToken('abc', undefined)).toBe(false)
+    expect(isValidToken('abc', ['abc'])).toBe(false)
+    expect(isValidToken('', '')).toBe(false)
+  })
+  it('tokenFromUrl:從 WS 握手網址取 ?token=', () => {
+    expect(tokenFromUrl('/?token=xyz')).toBe('xyz')
+    expect(tokenFromUrl('/')).toBe(null)
+    expect(tokenFromUrl(undefined)).toBe(null)
   })
 })

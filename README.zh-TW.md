@@ -62,7 +62,9 @@ npm run dev
 cd web && npm run dev
 ```
 
-瀏覽器開 <http://localhost:5173>,標題列右上出現 🟢「已連線」即代表接上後端。
+後端啟動時會印出一行 `用這個網址開啟介面: http://localhost:5173/?token=…`,**用這個網址開啟**,標題列右上出現 🟢「已連線」即代表接上後端。
+
+> **為什麼要 token?** 後端能啟動 agent、核准任意指令,只靠 Origin 檢查擋不住「本機其他程式直接呼叫 API」(它們不送 Origin)。所以後端每次啟動都產生一組隨機 token,每個 HTTP 請求(`x-sv-token` header)與 WebSocket(`?token=`)都要帶對才放行。前端讀到網址上的 token 後會存進 sessionStorage 並從網址列移除;重新整理沒問題,但後端重啟後 token 會換,要用新網址再開一次。想固定 token(例如跑腳本),啟動前設 `SV_TOKEN=自訂值`。
 
 **停止:** 在各自的終端按 `Ctrl+C`。若 port 被占住(EADDRINUSE :3001),先找出並砍掉殘留行程:
 
@@ -145,8 +147,8 @@ Claude**(獨立的審查 session,不會動到正在觀察/操控的 agent)。它
 ## 測試
 
 ```bash
-npm test            # 後端單元測試 (vitest, 136)
-cd web && npm test  # 前端單元測試 (vitest + jsdom, 86)
+npm test            # 後端單元測試 (vitest, 160)
+cd web && npm test  # 前端單元測試 (vitest + jsdom, 93)
 ```
 
 型別檢查:`npx tsc --noEmit`(根與 `web/` 各自)。
@@ -154,8 +156,8 @@ cd web && npm test  # 前端單元測試 (vitest + jsdom, 86)
 ## 端到端驗證
 
 ```bash
-# 先讓後端在跑 (npm run dev),再於另一終端:
-npx tsx spike/e2e.ts
+# 先用固定 token 啟動後端 (SV_TOKEN=dev npm run dev),再於另一終端:
+SV_TOKEN=dev npx tsx spike/e2e.ts
 ```
 
 `spike/e2e.ts` 模擬前端跑完整閉環:連 WS → `/start` → 遇 `await:tool` 自動核准 → 觀察節點轉 `done`。

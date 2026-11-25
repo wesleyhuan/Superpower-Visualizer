@@ -6,7 +6,7 @@ import { SourceController } from './sourceController'
 import { ReActAssembler } from './reactAssembler'
 import { makeObserveSource, workspaceFor, listObservableSessions } from './sourceSystems'
 import { listDirs, makeDir } from './dirs'
-import { isLocalHost, isAllowedOrigin, isObservableFile, isCsrfSafe } from './security'
+import { isLocalHost, isAllowedOrigin, isObservableFile, isCsrfSafe, isValidToken, makeToken, tokenFromUrl, TOKEN_HEADER } from './security'
 import type { SourceSystem } from './sourceSystems'
 import { translate } from './translator'
 import { realRunQuery, resolveWorkspace } from './agentAdapter'
@@ -51,7 +51,9 @@ export function wireEvents(
 
 // 建 express app(路由 + 中介層),不含 listen / WebSocket,方便用 supertest 測。
 // runQuery 可注入假實作,測試路由時不會真的呼叫 Agent SDK。
-export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
+// token:本機存取 token(見 security.ts);測試可注入固定值,未給則隨機產生。
+export function buildApp(deps: { runQuery?: typeof realRunQuery; token?: string } = {}) {
+  const token = deps.token ?? makeToken()
   const app = express()
   // 放寬 body 上限:大型 agent 的 ReAct trace(如 186 步)JSON 可能超過預設 100KB,
   // 否則 /analyze 會回 413 → 前端 res.json() 失敗 → 靜默退成一般「分析失敗」。
@@ -62,6 +64,15 @@ export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
     if (!isLocalHost(req.headers.host)) {
       console.error('[server] 拒絕非本機 Host:', req.headers.host)
       return res.status(403).json({ error: 'forbidden host' })
+    }
+    next()
+  })
+  // 本機存取 token:每個請求(含 GET)都要帶 x-sv-token。擋掉「不送 Origin 的本機程式」
+  // 直接打 API(Origin 檢查對它們無效)。/dirs、/sessions 會洩漏檔案系統資訊,所以讀取也要驗。
+  app.use((req, res, next) => {
+    if (!isValidToken(token, req.headers[TOKEN_HEADER])) {
+      console.error('[server] 拒絕缺少或錯誤 token 的請求:', req.method, req.path)
+      return res.status(401).json({ error: 'unauthorized' })
     }
     next()
   })
@@ -124,6 +135,8 @@ export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
   // 回到 Route B control 空白狀態(準備開新 agent);可帶使用者選的工作目錄。
   app.post('/new-agent', (req, res) => {
     const cwd = req.body?.cwd ? String(req.body.cwd) : undefined
+    // 開新 agent 前先叫停舊的:否則畫面清空了,舊 agent 還在背景跑,下一次 /start 會撞上它。
+    mgr.pause()
     controller.toControl(cwd)
     res.json({ ok: true })
   })
@@ -131,6 +144,12 @@ export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
   app.post('/start', (req, res) => {
     if (controller.isObserving()) controller.toControl() // 從觀察切回操控,清空畫面
     const prompt = String(req.body?.prompt ?? '')
+    // 已有 session 在跑(例如重複送出 / 連點)→ 409,不開第二個 consume 迴圈。
+    // 先檢查再 emit,免得被拒的 prompt 也出現在對話面板。
+    if (mgr.isRunning()) {
+      console.error('[server] /start 拒絕:已有 session 在跑')
+      return res.status(409).json({ ok: false, error: 'session already running' })
+    }
     emitUserMessage(prompt)
     mgr.start(prompt, controller.controlCwd())
     res.json({ ok: true })
@@ -143,7 +162,11 @@ export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
     console.log('[server] control', cmd)
     if (cmd.type === 'pause') mgr.pause()
     else if (cmd.type === 'approve') mgr.approveTool(cmd.toolUseId, cmd.allow)
-    else if (cmd.type === 'followup') { emitUserMessage(cmd.text); mgr.sendFollowup(cmd.text) }
+    else if (cmd.type === 'followup') {
+      if (!mgr.isRunning()) return res.status(409).json({ ok: false, error: 'no running session' })
+      emitUserMessage(cmd.text)
+      mgr.sendFollowup(cmd.text)
+    }
     res.json({ ok: true })
   })
 
@@ -186,23 +209,39 @@ export function buildApp(deps: { runQuery?: typeof realRunQuery } = {}) {
     }
   })
 
-  return { app, clients, controller }
+  return { app, clients, controller, token }
+}
+
+// WS 握手檢查:Origin 必須是本機,且網址要帶對 token。
+// 瀏覽器的 WebSocket 不能自訂 header,所以 token 走網址 ?token=。
+export function makeVerifyClient(token: string) {
+  return (info: { origin?: string; req: { url?: string } }): boolean => {
+    if (!isAllowedOrigin(info.origin)) {
+      console.error('[server] 拒絕 WS 來源:', info.origin)
+      return false
+    }
+    if (!isValidToken(token, tokenFromUrl(info.req.url))) {
+      console.error('[server] 拒絕 WS:缺少或錯誤 token')
+      return false
+    }
+    return true
+  }
 }
 
 export function createServer() {
-  const { app, clients, controller } = buildApp()
+  const { app, clients, controller, token } = buildApp()
   // 綁 127.0.0.1(非 0.0.0.0):本機單人工具,/dirs /mkdir /start 等會碰檔案系統與啟動 agent,
   // 不該對 LAN 開放。WebSocketServer 共用這個 server,一併只聽本機。
-  const server = app.listen(3001, '127.0.0.1', () => console.log('[server] http on 127.0.0.1:3001'))
+  const server = app.listen(3001, '127.0.0.1', () => {
+    console.log('[server] http on 127.0.0.1:3001')
+    // token 只印在這裡:能看到這個終端機的人才能用。前端從網址讀走後會把它從網址列移除。
+    console.log(`[server] 用這個網址開啟介面: http://localhost:5173/?token=${token}`)
+  })
   // WS 檢查 Origin:擋掉使用者造訪的惡意網頁背景連上來被動收取 agent 串流
   // (也擋 rebinding:其 Origin 會是 attacker.com)。非瀏覽器客戶端不送 Origin → 放行。
   const wss = new WebSocketServer({
     server,
-    verifyClient: (info: { origin?: string }) => {
-      const ok = isAllowedOrigin(info.origin)
-      if (!ok) console.error('[server] 拒絕 WS 來源:', info.origin)
-      return ok
-    },
+    verifyClient: makeVerifyClient(token),
   })
   wss.on('connection', (ws) => {
     clients.add(ws)
