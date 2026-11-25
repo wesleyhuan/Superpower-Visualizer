@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { applyPacket, resolvePending, initialState, type SessionState } from './store'
+import { readAuthToken, withToken } from './authToken'
 import type { Packet, ControlCommand, SessionInfo, SourceSystem, AnalysisTrace, AnalysisResult, DirListing } from './wireTypes'
 
-export interface SessionDeps { wsUrl?: string; WebSocketImpl?: typeof WebSocket; fetchImpl?: typeof fetch }
+// token:本機存取 token;未給則從網址 / sessionStorage 讀(見 authToken.ts)。測試可傳 null 表示沒有。
+export interface SessionDeps { wsUrl?: string; WebSocketImpl?: typeof WebSocket; fetchImpl?: typeof fetch; token?: string | null }
 
 export function useSession(deps: SessionDeps = {}) {
   const WS = deps.WebSocketImpl ?? WebSocket
-  const doFetch = deps.fetchImpl ?? fetch
-  const wsUrl = deps.wsUrl ?? `ws://${location.hostname}:3001`
+  const rawFetch = deps.fetchImpl ?? fetch
+  // token 只在掛載時讀一次(讀網址時會順便把它從網址列移除)。
+  const [token] = useState<string | null>(() => (deps.token !== undefined ? deps.token : readAuthToken()))
+  const wsUrl = withToken(deps.wsUrl ?? `ws://${location.hostname}:3001`, token)
+  // 所有 HTTP 請求都自動帶上 x-sv-token header;沒有 token 就照原樣送(後端會回 401)。
+  const doFetch = useCallback((input: string, init: RequestInit = {}) => {
+    if (!token) return rawFetch(input, init)
+    return rawFetch(input, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), 'x-sv-token': token } })
+  }, [rawFetch, token]) as typeof fetch
 
   const [state, setState] = useState<SessionState>(initialState())
   const [connected, setConnected] = useState(false)
@@ -105,5 +114,5 @@ export function useSession(deps: SessionDeps = {}) {
     return data.path
   }, [doFetch])
 
-  return { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions, analyze, loadDirs, makeDir }
+  return { state, connected, hasToken: !!token, pause, approve, followup, start, observe, newAgent, loadSessions, analyze, loadDirs, makeDir }
 }

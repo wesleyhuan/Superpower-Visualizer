@@ -1,6 +1,7 @@
 import { resolve, sep, join } from 'node:path'
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import type { SourceSystem } from './sourceSystems'
 
 // 只允許本機 hostname。擋 DNS rebinding:attacker.com 就算解析到 127.0.0.1,
@@ -19,7 +20,7 @@ export function isLocalHost(host: string | undefined): boolean {
 }
 
 // WebSocket 允許的瀏覽器來源:本機任一 port。非瀏覽器客戶端不送 Origin(undefined)→ 放行
-// (威脅對象是使用者造訪的網頁,那類請求一定帶 Origin)。
+// (威脅對象是使用者造訪的網頁,那類請求一定帶 Origin)。不帶 Origin 的本機程式改由下方的存取 token 擋。
 export function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true
   try {
@@ -57,4 +58,35 @@ export function isUnderRoot(root: string, file: string): boolean {
 // 驗證要觀察的檔案落在該系統允許的根目錄內,防任意檔讀 / 路徑穿越 / symlink 繞過。
 export function isObservableFile(system: SourceSystem, file: string): boolean {
   return isUnderRoot(observeRoot(system), file)
+}
+
+// ── 本機存取 token ──────────────────────────────────────────────
+// Host / Origin 檢查只擋得住「瀏覽器裡的惡意網頁」;本機任何程式(或同機其他使用者)
+// 直接 curl 127.0.0.1:3001 不帶 Origin,以前會被放行 → 可 /start 叫 agent、/control approve
+// 核准任意指令。解法同 Jupyter:每次啟動產生一組隨機 token,只印在啟動終端機,
+// 每個 HTTP 請求(x-sv-token header)與 WS 連線(?token=)都必須帶對才放行。
+export const TOKEN_HEADER = 'x-sv-token'
+
+// 32 bytes 隨機 = 256 bit,猜中機率可忽略。可用 SV_TOKEN 環境變數固定(方便腳本 / 重啟不換網址)。
+export function makeToken(fromEnv: string | undefined = process.env.SV_TOKEN): string {
+  const t = fromEnv?.trim()
+  return t ? t : randomBytes(32).toString('hex')
+}
+
+// 固定時間比較:一般 === 遇到第一個不同字元就停,回應時間會洩漏「猜對了幾個字」。
+export function isValidToken(expected: string, provided: unknown): boolean {
+  if (typeof provided !== 'string' || !expected) return false
+  const a = Buffer.from(expected)
+  const b = Buffer.from(provided)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+// 從 WS 握手的請求 URL(如 /?token=abc)取出 token。
+export function tokenFromUrl(url: string | undefined): string | null {
+  if (!url) return null
+  try {
+    return new URL(url, 'http://localhost').searchParams.get('token')
+  } catch {
+    return null
+  }
 }

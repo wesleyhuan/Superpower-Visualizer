@@ -35,7 +35,7 @@ const SunPath = 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5 19 19M3 12h2M19 12h2M5 19
 const MoonPath = 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z'
 
 export function App({ deps }: { deps?: SessionDeps } = {}) {
-  const { state, connected, pause, approve, followup, start, observe, newAgent, loadSessions, analyze, loadDirs, makeDir } = useSession(deps)
+  const { state, connected, hasToken, pause, approve, followup, start, observe, newAgent, loadSessions, analyze, loadDirs, makeDir } = useSession(deps)
   const [theme, toggleTheme] = useTheme()
   const [draft, setDraft] = useState('')
   const isObserving = state.mode === 'observe'
@@ -111,6 +111,13 @@ export function App({ deps }: { deps?: SessionDeps } = {}) {
           </button>
         </div>
       </header>
+
+      {/* 沒有存取 token:後端會拒絕所有請求,直接告訴使用者怎麼開 */}
+      {!hasToken && (
+        <div className="ended-banner" role="alert" style={{ margin: '8px 16px 0' }}>
+          缺少存取 token:請改用後端終端機印出的網址(http://localhost:5173/?token=…)開啟。
+        </div>
+      )}
 
       {/* MAIN */}
       <main className="app-main">
